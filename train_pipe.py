@@ -172,18 +172,19 @@ def main():
             train_dataloader = DataLoader(
                 train_dataset,
                 collate_fn=PromptDataCollatorPipe(),
-                num_workers = args.gradient_accumulation_steps,
+                num_workers = args.gradient_accumulation_steps//2,
                 shuffle=True,
                 drop_last=False,
                 batch_size=args.per_device_train_batch_size)
-            cur_num_train_bacth =len(train_dataloader)
+            cur_num_train_bacth =int(np.ceil(len(train_dataloader)/args.data_parallel_size))
             print_rank_0(
                 f"Beginning of Epoch {epoch+1}/{args.num_train_epochs}, Data file: {data_file}, Total Micro Batches: {cur_num_train_bacth}/{int(num_train_batch)}",
                 args.global_rank)
             print_rank_0(args, args.global_rank)
             train_loader = RepeatingLoader(train_dataloader)
             train_iter = iter(train_loader)
-            for step in range(cur_num_train_bacth):
+            cur_train_bacth_steps = int(np.ceil(cur_num_train_bacth/args.gradient_accumulation_steps)) + 16 #few steps may be skipped
+            for step in range(cur_train_bacth_steps):
                 loss = engine.train_batch(data_iter=train_iter)
             del data
             del train_dataset

@@ -33,13 +33,14 @@ def get_train_ds_config(offload,
         
         "reduce_bucket_size": 500000000,
         "reduce_scatter": True,
-
-#         "zero_quantized_weights": True,
-#         "zero_hpz_partition_size": 16,
-#         "zero_quantized_gradients": True,
+        
+        # zero++ deespeed>=0.10.0
+        # "zero_quantized_weights": True,
+        # "zero_hpz_partition_size": 16,
+        # "zero_quantized_gradients": True,
 
         "contiguous_gradients": True,
-        "overlap_comm": True,
+        # "overlap_comm": True,
         
         
         "offload_param": {
