@@ -72,7 +72,7 @@ parser.add_argument('--only_optimize_lora',
 parser = deepspeed.add_config_arguments(parser)
 
 args=parser.parse_args()
-args.model_path = "decapoda-research/llama-13b-hf"
+args.model_path = "openlm-research/open_llama_13b"
 args.data_dir = "news-commentary-v13-zh-en_parquet"
 args.zero_stage=3
 args.num_train_epochs=1
