@@ -33,8 +33,7 @@ def get_train_ds_config(offload,
         
         "reduce_bucket_size": 500000000,
         "reduce_scatter": True,
-        
-        # zero++ deespeed>=0.10.0
+        # zero++ requires deepspeed>=0.10.0
         # "zero_quantized_weights": True,
         # "zero_hpz_partition_size": 16,
         # "zero_quantized_gradients": True,
@@ -129,17 +128,15 @@ class PromptDataset(Dataset):
 
     def __init__(self, prompt_dataset):
         super().__init__()
-        self.prompt_dataset = prompt_dataset
+        self.prompt_input_ids = tuple(prompt_dataset['input_ids'])
+        self.prompt_labels = tuple(prompt_dataset['labels'])
 
     def __len__(self):
-        length = len(self.prompt_dataset['input_ids'])
-        return length
+        return len(self.prompt_input_ids)
 
     def __getitem__(self, idx):
-        return {
-            "input_ids": self.prompt_dataset["input_ids"][idx],
-            "labels": self.prompt_dataset["labels"][idx]
-        }
+        return self.prompt_input_ids[idx],self.prompt_labels[idx]
+
         
 class PromptDataCollatorPipe:
 
@@ -148,8 +145,8 @@ class PromptDataCollatorPipe:
         self.pad_token_id = pad_token_id
         
     def __call__(self, features):
-        input_ids = torch.tensor(np.stack([f["input_ids"] for f in features]),dtype=torch.long)
-        labels = torch.tensor(np.stack([f["labels"] for f in features]),dtype=torch.long)
+        input_ids = torch.tensor(np.stack([f[0] for f in features]),dtype=torch.long)
+        labels = torch.tensor(np.stack([f[1] for f in features]),dtype=torch.long)
         labels[labels == self.pad_token_id ] = self.IGNORE_TOKEN_ID
         return input_ids,labels
      

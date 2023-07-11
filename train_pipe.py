@@ -35,6 +35,7 @@ from pipeline_llama import LlamaForCausalLMPipe,LlamaCrossEntropyLoss
 import numpy as np
 import pyarrow.parquet
 import os
+import gc
 import argparse
 
 parser = argparse.ArgumentParser(description='My training script.')
@@ -75,12 +76,12 @@ args.model_path = "decapoda-research/llama-13b-hf"
 args.data_dir = "news-commentary-v13-zh-en_parquet"
 args.zero_stage=1
 args.num_train_epochs=1
-args.per_device_train_batch_size = 3
+args.per_device_train_batch_size = 2
 args.gradient_accumulation_steps = 2
 args.seed=1234
 args.weight_decay=0.01
 args.lr_scheduler_type="cosine"
-args.num_warmup_steps=500
+args.num_warmup_steps=50
 args.learning_rate=1e-4
 args.output_dir = "./output"
 args.pipe_parallel_size = 1
@@ -172,7 +173,7 @@ def main():
             train_dataloader = DataLoader(
                 train_dataset,
                 collate_fn=PromptDataCollatorPipe(),
-                num_workers = args.gradient_accumulation_steps//2,
+                num_workers = min(int(os.cpu_count()*0.8),args.gradient_accumulation_steps//2 + 1),
                 shuffle=True,
                 drop_last=False,
                 batch_size=args.per_device_train_batch_size)
@@ -183,7 +184,7 @@ def main():
             print_rank_0(args, args.global_rank)
             train_loader = RepeatingLoader(train_dataloader)
             train_iter = iter(train_loader)
-            cur_train_bacth_steps = int(np.ceil(cur_num_train_bacth/args.gradient_accumulation_steps)) + 16 #few steps may be skipped
+            cur_train_bacth_steps = int(np.ceil(cur_num_train_bacth/args.gradient_accumulation_steps))
             for step in range(cur_train_bacth_steps):
                 loss = engine.train_batch(data_iter=train_iter)
             del data
@@ -194,7 +195,7 @@ def main():
     if args.global_rank == 0:
         print_rank_0('saving model ...', args.global_rank)
         engine = convert_lora_to_linear_layer(engine)
-        if not os.path.exist(args.output_dir):
+        if not os.path.exists(args.output_dir):
             os.makedirs(args.output_dir)
         engine.save_fp16_model(args.output_dir)
          
