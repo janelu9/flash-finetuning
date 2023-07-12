@@ -194,12 +194,12 @@ def main():
             del train_dataloader
             gc.collect()
             
-    if args.global_rank == args.data_parallel_size * engine.stage_id:
-        print('saving model ...', args.global_rank)
-        engine = convert_lora_to_linear_layer(engine)
+    if args.output_dir:
         if not os.path.exists(args.output_dir):
             os.makedirs(args.output_dir)
-        torch.save(engine.module.state_dict(),os.path.join(args.output_dir,"%03d.bin" % engine.stage_id))
+        module = convert_lora_to_linear_layer(engine.module)
+        module.save_pretrained(args.output_dir)
+        
          
 if __name__ == "__main__":
     main()
