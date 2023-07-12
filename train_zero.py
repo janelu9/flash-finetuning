@@ -186,6 +186,7 @@ def main():
     # print_rank_0(f"ppl: {perplexity}", args.global_rank)
     
     for epoch in range(args.num_train_epochs):
+        accumulation_train_batches = 0
         for data_file in data_files:
             data = pyarrow.parquet.read_table(os.path.join(data_dir,data_file))
             train_dataset = PromptDataset({k:data[k].to_numpy().tolist() 
@@ -195,8 +196,9 @@ def main():
                 collate_fn = PromptDataCollator(),
                 sampler = DistributedSampler(train_dataset),
                 batch_size = args.per_device_train_batch_size)
+            accumulation_train_batches += len(train_dataloader)
             print_rank_0(
-                f"Beginning of Epoch {epoch+1}/{args.num_train_epochs}, Data File: {data_file}, Total Micro Batches: {len(train_dataloader)}/{int(num_train_batch)}",
+                f"Beginning of Epoch {epoch+1}/{args.num_train_epochs}, Data File: {data_file}, Total Micro Batches: {accumulation_train_batches}/{int(num_train_batch)}",
                 args.global_rank)
             print_rank_0(args, args.global_rank)
             model.train()

@@ -165,6 +165,7 @@ def main():
         lr_scheduler=lr_scheduler,)
 
     for epoch in range(args.num_train_epochs):
+        accumulation_train_batches = 0
         for data_file in data_files:
             data = pyarrow.parquet.read_table(os.path.join(data_dir,data_file))
             train_dataset = PromptDataset(
@@ -178,13 +179,14 @@ def main():
                 drop_last=False,
                 batch_size=args.per_device_train_batch_size)
             cur_num_train_bacth =int(np.ceil(len(train_dataloader)/args.data_parallel_size))
+            accumulation_train_batches += cur_num_train_bacth
             print_rank_0(
-                f"Beginning of Epoch {epoch+1}/{args.num_train_epochs}, Data file: {data_file}, Total Micro Batches: {cur_num_train_bacth}/{int(num_train_batch)}",
+                f"Beginning of Epoch {epoch+1}/{args.num_train_epochs}, Data file: {data_file}, Total Micro Batches: {accumulation_train_batches}/{int(num_train_batch)}",
                 args.global_rank)
             print_rank_0(args, args.global_rank)
             train_loader = RepeatingLoader(train_dataloader)
             train_iter = iter(train_loader)
-            cur_train_bacth_steps = int(np.ceil(cur_num_train_bacth/args.gradient_accumulation_steps))
+            cur_train_bacth_steps = int(np.ceil(cur_num_train_bacth/args.gradient_accumulation_steps))+20#few steps may be skipped
             for step in range(cur_train_bacth_steps):
                 loss = engine.train_batch(data_iter=train_iter)
             del data
@@ -192,12 +194,12 @@ def main():
             del train_dataloader
             gc.collect()
             
-    if args.global_rank == 0:
+    if args.global_rank == args.data_parallel_size * engine.stage_id:
         print_rank_0('saving model ...', args.global_rank)
         engine = convert_lora_to_linear_layer(engine)
         if not os.path.exists(args.output_dir):
             os.makedirs(args.output_dir)
-        engine.save_fp16_model(args.output_dir)
+        torch.save(engine.module.state_dict(),os.path.join(args.output_dir,"%03d.bin" % engine.stage_id))
          
 if __name__ == "__main__":
     main()
