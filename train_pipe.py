@@ -195,7 +195,7 @@ def main():
             gc.collect()
             
     if args.global_rank == args.data_parallel_size * engine.stage_id:
-        print_rank_0('saving model ...', args.global_rank)
+        print('saving model ...', args.global_rank)
         engine = convert_lora_to_linear_layer(engine)
         if not os.path.exists(args.output_dir):
             os.makedirs(args.output_dir)
