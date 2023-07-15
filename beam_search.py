@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 # coding: utf-8
-# Created on Sat Jul 1 21:22:49 2023
+# Created on Sat Jul 14 21:22:49 2023
 # @author: Lu Jian
 # Email:janelu@live.cn;
 
@@ -11,8 +11,8 @@ def beam_search(self,input_ids,max_length =1024,num_beams =15):
     # Adopted from https://gitee.com/janelu9/TrOCR/blob/main/image2text.py#L838
     INF = 1.e4
     
-    def prepare(inp):
-        out,cache= self.model(inp,use_cache = True,return_dict =False)
+    def prepare(input_ids):
+        out,cache= self.model(input_ids,use_cache = True,return_dict =False)
         logits = self.lm_head(out[:,-1,:])
         log_probs = F.log_softmax(logits,dim=-1)
         cur_log_probs,cur_word = log_probs.topk(num_beams)
@@ -28,7 +28,7 @@ def beam_search(self,input_ids,max_length =1024,num_beams =15):
             end_log_probs = cur_log_probs+(1.-end_flags)*-INF
             cur_log_probs += end_flags*-INF
         device = logits.device
-        batch_size,pro_len = inp.size()
+        batch_size,pro_len = input_ids.size()
         length=torch.tensor([1],device=device)
         position_id=torch.tensor([[pro_len]],device=device)
         dim = cache[0][0].shape[1:]
@@ -37,8 +37,8 @@ def beam_search(self,input_ids,max_length =1024,num_beams =15):
                  for k,v in cache]
         vocab_size = self.model.vocab_size
         batch_pos = (torch.arange(batch_size,device=device)).unsqueeze(1)
-        batch_pos_ = batch_pos.tile(1,num_beams)
-        #batch_pos_ = batch_pos.tile(1,num_beams+1)
+        # batch_pos_ = batch_pos.tile(1,num_beams)
+        batch_pos_ = batch_pos.tile(1,num_beams+1)
         batch_pos =  batch_pos.tile(1,num_beams)
         return (cur_log_probs,cur_seqs,cur_word,cache,
                 end_log_probs,end_seqs,end_word,end_flags,
@@ -59,10 +59,10 @@ def beam_search(self,input_ids,max_length =1024,num_beams =15):
                                return_dict =False)
         logits = self.lm_head(out[:,-1,:])
         log_probs = F.log_softmax(logits,dim=-1)
-        #cur_log_probs =(log_probs +cur_log_probs.contiguous().view(-1,1)*(length.log()+1))/((length+1).log()+1)
-        #cur_log_probs,topk_ids = cur_log_probs.view(batch_size,-1).topk(num_beams+1)
-        cur_log_probs = log_probs +cur_log_probs.contiguous().view(-1,1)
-        cur_log_probs,topk_ids = cur_log_probs.view(batch_size,-1).topk(num_beams)
+        cur_log_probs =(log_probs +cur_log_probs.contiguous().view(-1,1)*(length.log()+1))/((length+1).log()+1)
+        cur_log_probs,topk_ids = cur_log_probs.view(batch_size,-1).topk(num_beams+1)
+        # cur_log_probs = log_probs +cur_log_probs.contiguous().view(-1,1)
+        # cur_log_probs,topk_ids = cur_log_probs.view(batch_size,-1).topk(num_beams)
         cur_word =   (topk_ids % vocab_size)
         beam_coordinate_ = topk_ids // vocab_size
         end_seqs = torch.cat([end_seqs,end_word],-1)
@@ -91,8 +91,8 @@ def beam_search(self,input_ids,max_length =1024,num_beams =15):
                 cur_log_probs,cur_word,cur_seqs,cache)
     
     def grow(cur_log_probs,cur_word,cur_seqs,beam_coordinate_,cache):
-        #cur_log_probs = cur_log_probs[:,:num_beams]
-        #cur_word = cur_word[:,:num_beams]
+        cur_log_probs = cur_log_probs[:,:num_beams]
+        cur_word = cur_word[:,:num_beams]
         cur_seqs = torch.cat([cur_seqs[batch_pos,beam_coordinate_[:,:num_beams]],cur_word.unsqueeze(-1)],-1)
         select_index = (batch_pos*num_beams+beam_coordinate_[:,:num_beams]).view(-1)
         cache = [(k[select_index],v[select_index]) for k,v in cache]
@@ -107,7 +107,7 @@ def beam_search(self,input_ids,max_length =1024,num_beams =15):
     
     with torch.no_grad():
         (cur_log_probs,cur_seqs,cur_word,cache,end_log_probs,end_seqs,end_word,end_flags,
-         end_log_probs_pre,end_flags_pre,vocab_size,batch_size,batch_pos,batch_pos_,length,position_id) = prepare(inp)
+         end_log_probs_pre,end_flags_pre,vocab_size,batch_size,batch_pos,batch_pos_,length,position_id) = prepare(input_ids)
         while position_id < max_length - 1 and not stop(cur_log_probs,end_log_probs_pre,end_flags_pre):
             cache,cur_log_probs,cur_word,beam_coordinate_,end_seqs,end = step(
                 cur_word,position_id,cache,cur_log_probs,end_seqs)
@@ -119,3 +119,4 @@ def beam_search(self,input_ids,max_length =1024,num_beams =15):
             position_id += 1
             length += 1
         return final(end_seqs,end_log_probs,cur_seqs,cur_log_probs)
+        
