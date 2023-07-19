@@ -29,21 +29,16 @@ def beam_search(self,input_ids,max_length =1024,num_beams =15):
             cur_log_probs += end_flags*-INF
         device = logits.device
         batch_size,pro_len = input_ids.size()
-        length=torch.tensor([1],device=device)
-        position_id=torch.tensor([[pro_len]],device=device)
+        length = torch.tensor([1],device=device)
+        position_id = torch.tensor([[pro_len]],device=device)
         dim = cache[0][0].shape[1:]
-        cache = [(k.unsqueeze(1).tile(1,num_beams,1,1,1).view(-1,*dim),
-                  v.unsqueeze(1).tile(1,num_beams,1,1,1).view(-1,*dim))
-                 for k,v in cache]
+        cache = [(k.unsqueeze(1).tile(1,num_beams,1,1,1).view(-1,*dim),v.unsqueeze(1).tile(1,num_beams,1,1,1).view(-1,*dim)) for k,v in cache]
         vocab_size = self.model.vocab_size
         batch_pos = (torch.arange(batch_size,device=device)).unsqueeze(1)
-        # batch_pos_ = batch_pos.tile(1,num_beams)
+#         batch_pos_ = batch_pos.tile(1,num_beams)
         batch_pos_ = batch_pos.tile(1,num_beams+1)
         batch_pos =  batch_pos.tile(1,num_beams)
-        return (cur_log_probs,cur_seqs,cur_word,cache,
-                end_log_probs,end_seqs,end_word,end_flags,
-                end_log_probs_pre,end_flags_pre,vocab_size,
-                batch_size,batch_pos,batch_pos_,length,position_id)
+        return cur_log_probs,cur_seqs,cur_word,cache,end_log_probs,end_seqs,end_word,end_flags,end_log_probs_pre,end_flags_pre,vocab_size,batch_size,batch_pos,batch_pos_,length,position_id
     
     def stop(cur_log_probs,end_log_probs_pre,end_flags_pre):
         max_cur_log_probs = cur_log_probs.max(1)[0]
@@ -52,25 +47,20 @@ def beam_search(self,input_ids,max_length =1024,num_beams =15):
         return torch.all(min_end_log_probs>max_cur_log_probs)
     
     def step(cur_word,position_id,cache,cur_log_probs,end_seqs):        
-        out,cache= self.model(cur_word.contiguous().view(-1,1),
-                               position_ids = position_id,
-                               past_key_values = cache,
-                               use_cache = True,
-                               return_dict =False)
+        out,cache= self.model(cur_word.contiguous().view(-1,1),position_ids = position_id,past_key_values = cache,use_cache = True,return_dict =False)
         logits = self.lm_head(out[:,-1,:])
         log_probs = F.log_softmax(logits,dim=-1)
         cur_log_probs =(log_probs +cur_log_probs.contiguous().view(-1,1)*(length.log()+1))/((length+1).log()+1)
         cur_log_probs,topk_ids = cur_log_probs.view(batch_size,-1).topk(num_beams+1)
-        # cur_log_probs = log_probs +cur_log_probs.contiguous().view(-1,1)
-        # cur_log_probs,topk_ids = cur_log_probs.view(batch_size,-1).topk(num_beams)
+#         cur_log_probs = log_probs +cur_log_probs.contiguous().view(-1,1)
+#         cur_log_probs,topk_ids = cur_log_probs.view(batch_size,-1).topk(num_beams)
         cur_word =   (topk_ids % vocab_size)
         beam_coordinate_ = topk_ids // vocab_size
         end_seqs = torch.cat([end_seqs,end_word],-1)
         end = cur_word == self.config.eos_token_id
         return cache,cur_log_probs,cur_word,beam_coordinate_,end_seqs,end
     
-    def update(end_log_probs,end_flags,end,end_seqs,
-               cur_seqs,beam_coordinate_,cur_word,cur_log_probs,cache):
+    def update(end_log_probs,end_flags,end,end_seqs,cur_seqs,beam_coordinate_,cur_word,cur_log_probs,cache):
         end_log_probs_pre = end_log_probs
         end_flags_pre = end_flags
         cur_end_flags = end.float()
@@ -87,8 +77,7 @@ def beam_search(self,input_ids,max_length =1024,num_beams =15):
         cur_seqs = torch.cat([cur_seqs[batch_pos,topk_ids],cur_word.unsqueeze(-1)],-1)
         select_index = (batch_pos*num_beams+beam_coordinate_[batch_pos,topk_ids]).view(-1)
         cache = [(k[select_index],v[select_index]) for k,v in cache]
-        return (end_log_probs_pre,end_flags_pre,end_log_probs,end_seqs,end_flags,
-                cur_log_probs,cur_word,cur_seqs,cache)
+        return end_log_probs_pre,end_flags_pre,end_log_probs,end_seqs,end_flags,cur_log_probs,cur_word,cur_seqs,cache
     
     def grow(cur_log_probs,cur_word,cur_seqs,beam_coordinate_,cache):
         cur_log_probs = cur_log_probs[:,:num_beams]
@@ -103,17 +92,14 @@ def beam_search(self,input_ids,max_length =1024,num_beams =15):
         combine_log_probs =torch.cat([end_log_probs, cur_log_probs],1)
         final_log_probs, topk_ids = combine_log_probs.topk(num_beams)
         final_seqs = combine_seqs[batch_pos,topk_ids]
-        return final_seqs,final_log_probs 
+        return final_seqs,final_log_probs
     
     with torch.no_grad():
-        (cur_log_probs,cur_seqs,cur_word,cache,end_log_probs,end_seqs,end_word,end_flags,
-         end_log_probs_pre,end_flags_pre,vocab_size,batch_size,batch_pos,batch_pos_,length,position_id) = prepare(input_ids)
+        cur_log_probs,cur_seqs,cur_word,cache,end_log_probs,end_seqs,end_word,end_flags,end_log_probs_pre,end_flags_pre,vocab_size,batch_size,batch_pos,batch_pos_,length,position_id = prepare(input_ids)
         while position_id < max_length - 1 and not stop(cur_log_probs,end_log_probs_pre,end_flags_pre):
-            cache,cur_log_probs,cur_word,beam_coordinate_,end_seqs,end = step(
-                cur_word,position_id,cache,cur_log_probs,end_seqs)
+            cache,cur_log_probs,cur_word,beam_coordinate_,end_seqs,end = step(cur_word,position_id,cache,cur_log_probs,end_seqs)
             if torch.any(end):
-                end_log_probs_pre,end_flags_pre,end_log_probs,end_seqs,end_flags,cur_log_probs,cur_word,cur_seqs,cache = update(
-                    end_log_probs,end_flags,end,end_seqs,cur_seqs,beam_coordinate_,cur_word,cur_log_probs,cache)
+                end_log_probs_pre,end_flags_pre,end_log_probs,end_seqs,end_flags,cur_log_probs,cur_word,cur_seqs,cache = update(end_log_probs,end_flags,end,end_seqs,cur_seqs,beam_coordinate_,cur_word,cur_log_probs,cache)
             else:
                 cur_log_probs,cur_word,cur_seqs,cache = grow(cur_log_probs,cur_word,cur_seqs,beam_coordinate_,cache)
             position_id += 1
