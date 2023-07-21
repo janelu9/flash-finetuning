@@ -17,11 +17,12 @@ import gc
 
 PROMPT_BEGIN: str = 'BEGINNING OF CONVERSATION: '
 PROMPT_USER: str = 'USER: {input} '
-PROMPT_ASSISTANT: str = 'ASSISTANT:'  # should not have a space at the end
-PROMPT_JOIN: str = PROMPT_USER + PROMPT_ASSISTANT
-PROMPT_INPUT: str = PROMPT_BEGIN + PROMPT_USER + PROMPT_ASSISTANT
+PROMPT_ASSISTANT: str = 'ASSISTANT: {answer}'  # should not have a space at the end
+PROMPT_INPUT: str = PROMPT_BEGIN + PROMPT_USER
 IGNORE_TOKEN_ID: int = -100
 MAX_SEQ_LENGTH: int  = 2048
+MAX_ASSISTANT_LENGTH: int  = 1024
+PROMPT_ASSISTANT_LENGTH: int = 5
 OVERLAPPING_LENGTH: int  = 128
 FILTER_LENGTH: int  = 256
 PATTERN: str = "请将中文：“{inp}”翻译为英文"
@@ -73,33 +74,37 @@ def token_qa(file,tokenizer):
             inp,ans=inp_ans
             prompt = PROMPT_INPUT.format(input=PATTERN.format(inp=inp))
             ids=tokenizer.encode(prompt)
-            offset.append(len(ids))
-            if offset[1] > MAX_SEQ_LENGTH - 1: #labels full of ignored ids may cause loss to be nan
-                continue
-            ads=tokenizer.encode(ans)[1:]
+            offset.append(len(ids) + PROMPT_ASSISTANT_LENGTH)
+            if offset[1] >= MAX_SEQ_LENGTH - MAX_ASSISTANT_LENGTH: #labels full of ignored ids may cause loss to be nan
+                offset[1] = MAX_SEQ_LENGTH - MAX_ASSISTANT_LENGTH
+                ids = ids[:offset[1] - PROMPT_ASSISTANT_LENGTH ]            
+            ads=tokenizer.encode(PROMPT_ASSISTANT.format(answer=ans))[1:]
             ids.extend(ads)
             ids.append(tokenizer.eos_token_id)
             offset.append(len(ids))
             #for dialog
-            for i in range(2,len(inp_anses),2):
-                inp_ans=inp_anses[i:i+2]
-                if len(inp_ans)==2:
-                    inp,ans=inp_ans
-                    prompt = PROMPT_JOIN.format(input=inp)
-                    ids.extend(tokenizer.encode(prompt)[1:])
-                    offset.append(len(ids))
-                    ads=tokenizer.encode(ans)[1:]
-                    ids.extend(ads)
-                    ids.append(tokenizer.eos_token_id)
-                    offset.append(len(ids))
-            ids=tokenizer.pad({"input_ids":ids},
-                              max_length=MAX_SEQ_LENGTH,
-                              padding='max_length',
-                              return_attention_mask=False)["input_ids"]
-            # pad = [tokenizer.pad_token_id]*(MAX_SEQ_LENGTH-len(ids)-1)
-            # ids = ids[:MAX_SEQ_LENGTH-1]
-            # ids.append(tokenizer.eos_token_id)
-            # ids.extend(pad)
+            if offset[-1] < MAX_SEQ_LENGTH:
+                for i in range(2,len(inp_anses),2):
+                    inp_ans=inp_anses[i:i+2]
+                    if len(inp_ans)==2:
+                        inp,ans=inp_ans
+                        prompt = PROMPT_USER.format(input=inp)
+                        ids.extend(tokenizer.encode(prompt)[1:])
+                        offset.append(len(ids) + PROMPT_ASSISTANT_LENGTH)
+                        if offset[-1] >= MAX_SEQ_LENGTH:
+                            break
+                        ads=tokenizer.encode(PROMPT_ASSISTANT.format(answer=ans))[1:]
+                        ids.extend(ads)
+                        ids.append(tokenizer.eos_token_id)
+                        offset.append(len(ids))
+            # ids=tokenizer.pad({"input_ids":ids},
+                              # max_length=MAX_SEQ_LENGTH,
+                              # padding='max_length',
+                              # return_attention_mask=False)["input_ids"]
+            pad = [tokenizer.pad_token_id]*(MAX_SEQ_LENGTH-offset[-1]-1)
+            ids = ids[:min(MAX_SEQ_LENGTH,offset[-1])-1]
+            ids.append(tokenizer.eos_token_id)
+            ids.extend(pad)
             input_ids = np.array(ids, dtype=np.int32)
             labels = input_ids.copy()
             for i in range(0,len(offset)-1,2):
