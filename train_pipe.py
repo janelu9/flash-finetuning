@@ -178,7 +178,6 @@ def main():
         optimizer=optimizer,
         lr_scheduler=lr_scheduler,)
         
-    steps=0
     checkpoint_memory=[]
     for epoch in range(args.num_train_epochs):
         accumulation_train_batches = 0
@@ -205,7 +204,7 @@ def main():
             cur_train_bacth_steps = int(np.ceil(cur_num_train_bacth/args.gradient_accumulation_steps))+20#few steps may be skipped
             for step in range(cur_train_bacth_steps):
                 loss = engine.train_batch(data_iter=train_iter)
-                steps += 1
+                steps = engine.global_steps
                 if args.checkpoint_dir and steps % args.steps_per_checkpoint == 0:
                     if args.max_checkpoint_num > 0 and args.max_checkpoint_num == len(checkpoint_memory):
                         oldest = checkpoint_memory.pop(0)
