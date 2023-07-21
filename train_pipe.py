@@ -52,7 +52,19 @@ parser.add_argument('--max_len',
 parser.add_argument('--steps_per_print',
                     type=int,
                     default=10,
-                    help='max seq len')              
+                    help='steps per print')
+parser.add_argument('--steps_per_checkpoint',
+                    type=int,
+                    default=100,
+                    help='steps per checkpoint')
+parser.add_argument("--checkpoint_dir",
+                    type=str,
+                    default= "",
+                    help="checkpoint dir")
+parser.add_argument('--max_checkpoint_num',
+                    type=int,
+                    default=-1,
+                    help='max checkpoint num')
 parser.add_argument('--gradient_checkpointing',
                     action='store_true',
                     help='Enable gradient checkpointing for model.')
@@ -114,6 +126,8 @@ def main():
         'train_batch_size'] = args.per_device_train_batch_size*args.gradient_accumulation_steps*args.data_parallel_size
     ds_config['steps_per_print'] = args.steps_per_print
     set_random_seed(args.seed)
+    if args.checkpoint_dir and not os.path.exists(args.checkpoint_dir) and args.global_rank ==0 :
+        os.system(f"mkdir -p {args.checkpoint_dir}")
     torch.distributed.barrier()
 
     config=LlamaConfig.from_pretrained(args.model_path)
@@ -163,7 +177,9 @@ def main():
         model=model,
         optimizer=optimizer,
         lr_scheduler=lr_scheduler,)
-
+        
+    steps=0
+    checkpoint_memory=[]
     for epoch in range(args.num_train_epochs):
         accumulation_train_batches = 0
         for data_file in data_files:
@@ -189,13 +205,26 @@ def main():
             cur_train_bacth_steps = int(np.ceil(cur_num_train_bacth/args.gradient_accumulation_steps))+20#few steps may be skipped
             for step in range(cur_train_bacth_steps):
                 loss = engine.train_batch(data_iter=train_iter)
+                steps += 1
+                if args.checkpoint_dir and steps % args.steps_per_checkpoint == 0:
+                    if args.max_checkpoint_num > 0 and args.max_checkpoint_num == len(checkpoint_memory):
+                        oldest = checkpoint_memory.pop(0)
+                        os.system(f"rm -rf {os.path.join(args.checkpoint_dir,str(oldest))}")
+                    engine.save_checkpoint(args.checkpoint_dir,tag=steps)
+                    checkpoint_memory.append(steps)
             del data
             del train_dataset
             del train_dataloader
             gc.collect()
             
+    if args.checkpoint_dir:
+        if args.max_checkpoint_num>0 and args.max_checkpoint_num == len(checkpoint_memory):
+            oldest = checkpoint_memory.pop(0)
+            os.system(f"rm -rf {os.path.join(args.checkpoint_dir,str(steps))}")
+        engine.save_checkpoint(args.checkpoint_dir,tag=steps)
+        
     if args.output_dir:
-        if not os.path.exists(args.output_dir):
+        if not os.path.exists(args.output_dir) and args.global_rank == 0:
             os.makedirs(args.output_dir)
         convert_lora_to_linear_layer(engine.module).half().save_pretrained(args.output_dir)
         

@@ -97,10 +97,6 @@ def token_qa(file,tokenizer):
                         ids.extend(ads)
                         ids.append(tokenizer.eos_token_id)
                         offset.append(len(ids))
-            # ids=tokenizer.pad({"input_ids":ids},
-                              # max_length=MAX_SEQ_LENGTH,
-                              # padding='max_length',
-                              # return_attention_mask=False)["input_ids"]
             pad = [tokenizer.pad_token_id]*(MAX_SEQ_LENGTH-offset[-1]-1)
             ids = ids[:min(MAX_SEQ_LENGTH,offset[-1])-1]
             ids.append(tokenizer.eos_token_id)
