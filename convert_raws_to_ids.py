@@ -21,8 +21,7 @@ PROMPT_ASSISTANT: str = 'ASSISTANT: {answer}'  # should not have a space at the 
 PROMPT_INPUT: str = PROMPT_BEGIN + PROMPT_USER
 IGNORE_TOKEN_ID: int = -100
 MAX_SEQ_LENGTH: int  = 2048
-MAX_ASSISTANT_LENGTH: int  = 1024
-PROMPT_ASSISTANT_LENGTH: int = 5
+ASSISTANT_LENGTH: int = 5
 OVERLAPPING_LENGTH: int  = 128
 FILTER_LENGTH: int  = 256
 PATTERN: str = "请将中文：“{inp}”翻译为英文"
@@ -68,43 +67,48 @@ def qa_generator(file):
 def token_qa(file,tokenizer):
     for sample in qa_generator(file):
         inp_anses = sample.strip().split("\t") # data format: Input\tAnswer
-        offset=[0]
+        offsets=[0]
         inp_ans=inp_anses[:2]
         if len(inp_ans)==2:
             inp,ans=inp_ans
             prompt = PROMPT_INPUT.format(input=PATTERN.format(inp=inp))
             ids=tokenizer.encode(prompt)
-            offset.append(len(ids) + PROMPT_ASSISTANT_LENGTH)
-            if offset[1] >= MAX_SEQ_LENGTH - MAX_ASSISTANT_LENGTH: #labels full of ignored ids may cause loss to be nan
-                offset[1] = MAX_SEQ_LENGTH - MAX_ASSISTANT_LENGTH
-                ids = ids[:offset[1] - PROMPT_ASSISTANT_LENGTH ]            
+            offsets.append(len(ids) + ASSISTANT_LENGTH)
             ads=tokenizer.encode(PROMPT_ASSISTANT.format(answer=ans))[1:]
             ids.extend(ads)
             ids.append(tokenizer.eos_token_id)
-            offset.append(len(ids))
-            #for dialog
-            if offset[-1] < MAX_SEQ_LENGTH:
-                for i in range(2,len(inp_anses),2):
-                    inp_ans=inp_anses[i:i+2]
-                    if len(inp_ans)==2:
-                        inp,ans=inp_ans
-                        prompt = PROMPT_USER.format(input=inp)
-                        ids.extend(tokenizer.encode(prompt)[1:])
-                        offset.append(len(ids) + PROMPT_ASSISTANT_LENGTH)
-                        if offset[-1] >= MAX_SEQ_LENGTH:
-                            break
-                        ads=tokenizer.encode(PROMPT_ASSISTANT.format(answer=ans))[1:]
-                        ids.extend(ads)
-                        ids.append(tokenizer.eos_token_id)
-                        offset.append(len(ids))
-            pad = [tokenizer.pad_token_id]*(MAX_SEQ_LENGTH-offset[-1]-1)
-            ids = ids[:min(MAX_SEQ_LENGTH,offset[-1])-1]
+            offsets.append(len(ids))
+            if offsets[-1] > MAX_SEQ_LENGTH:
+                offsets[1] = int((offsets[1] - ASSISTANT_LENGTH)/offsets[-1]*MAX_SEQ_LENGTH)
+                ids = ids[:offsets[1]]
+                ids.extend(ads[:MAX_SEQ_LENGTH - offsets[1] - 1])
+                ids.append(tokenizer.eos_token_id)
+                offsets[1] += ASSISTANT_LENGTH
+                offsets[-1] = len(ids)
+            # for dialog
+            i = 2
+            while i < len(inp_anses) -1 and offsets[-1] < MAX_SEQ_LENGTH:
+                inp_ans=inp_anses[i:i+2]
+                if len(inp_ans)==2:
+                    inp,ans=inp_ans
+                    prompt = PROMPT_USER.format(input=inp)
+                    ids.extend(tokenizer.encode(prompt)[1:])
+                    offsets.append(len(ids) + ASSISTANT_LENGTH)
+                    if offsets[-1] >= MAX_SEQ_LENGTH:
+                        break
+                    ads=tokenizer.encode(PROMPT_ASSISTANT.format(answer=ans))[1:]
+                    ids.extend(ads)
+                    ids.append(tokenizer.eos_token_id)
+                    offsets.append(len(ids))
+                    i += 2
+            pad = [tokenizer.pad_token_id]*(MAX_SEQ_LENGTH - offsets[-1] - 1)
+            ids = ids[:min(MAX_SEQ_LENGTH,offsets[-1])-1]
             ids.append(tokenizer.eos_token_id)
             ids.extend(pad)
             input_ids = np.array(ids, dtype=np.int32)
             labels = input_ids.copy()
-            for i in range(0,len(offset)-1,2):
-                s,e=offset[i:i+2]
+            for i in range(0,len(offsets)-1,2):
+                s,e=offsets[i:i+2]
                 if s<MAX_SEQ_LENGTH:
                     labels[s:e] = IGNORE_TOKEN_ID
             yield {"input_ids":input_ids,"labels":labels}
