@@ -24,7 +24,7 @@ MAX_SEQ_LENGTH: int  = 2048
 ASSISTANT_LENGTH: int = 5
 OVERLAPPING_LENGTH: int  = 128
 FILTER_LENGTH: int  = 256
-PATTERN: str = "请将中文：“{inp}”翻译为英文"
+PATTERN: str = "请将下文翻译为英文：{inp}"
 
 def clean_wikitext(string):
     """TODO"""
