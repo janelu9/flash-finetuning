@@ -231,8 +231,7 @@ def main():
                             batch_size=args.per_device_train_batch_size)
                         eval_loader = RepeatingLoader(eval_dataloader)
                         eval_iter = iter(eval_loader)
-                        cur_num_eval_bacth =int(np.ceil(len(eval_dataloader)/args.data_parallel_size))
-                        cur_eval_bacth_steps = int(np.ceil(cur_num_eval_bacth/args.gradient_accumulation_steps))
+                        cur_eval_bacth_steps = int(np.ceil(len(eval_dataloader)/args.data_parallel_size/args.gradient_accumulation_steps))
                         for eval_step in range(cur_eval_bacth_steps):
                             loss = engine.eval_batch(data_iter = eval_iter)
                             num_samples += 1
@@ -264,7 +263,6 @@ def main():
         if not os.path.exists(args.output_dir) and args.global_rank == 0:
             os.makedirs(args.output_dir)
         convert_lora_to_linear_layer(engine.module).half().save_pretrained(args.output_dir)
-        
-         
+
 if __name__ == "__main__":
     main()
