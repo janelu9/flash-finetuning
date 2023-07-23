@@ -122,8 +122,8 @@ def sample(self, input_ids, max_length = 1024, num_beams = 1, top_k = 50, top_p 
         device = logits.device
         batch_size,pro_len = input_ids.size()
         left_pad = torch.full((batch_size,1),False,dtype=torch.bool,device=device)
-        cur_topk_probs = (cur_topk_probs.masked_fill_(torch.cat([left_pad,cur_topk_probs.cumsum(-1)[:,:-1] > top_p],-1),-INF)/T).softmax(-1)
-        topb_ids = torch.multinomial(cur_topk_probs,num_beams)
+        cur_topp_probs = (cur_topk_probs.masked_fill_(torch.cat([left_pad,cur_topk_probs.cumsum(-1)[:,:-1] > top_p],-1),-INF)/T).softmax(-1)
+        topb_ids = torch.multinomial(cur_topp_probs,num_beams)
         cur_log_probs = cur_log_probs.gather(1,topb_ids)
         cur_word = cur_word.gather(1,topb_ids)
         cur_seqs = cur_word.clone().unsqueeze(-1)
@@ -143,7 +143,6 @@ def sample(self, input_ids, max_length = 1024, num_beams = 1, top_k = 50, top_p 
         cache = [(k.unsqueeze(1).tile(1,num_beams,1,1,1).view(-1,*dim),v.unsqueeze(1).tile(1,num_beams,1,1,1).view(-1,*dim)) for k,v in cache]
         vocab_size = self.model.vocab_size
         batch_pos = (torch.arange(batch_size,device=device)).unsqueeze(1)
-#         batch_pos_ = batch_pos.tile(1,num_beams)
         batch_pos_ = batch_pos.tile(1,num_beams+1)
         batch_pos =  batch_pos.tile(1,num_beams)
         batch_beam_pos = batch_pos * num_beams
@@ -161,11 +160,11 @@ def sample(self, input_ids, max_length = 1024, num_beams = 1, top_k = 50, top_p 
         log_probs = F.log_softmax(logits,dim=-1)
         cur_log_probs =(log_probs +cur_log_probs.contiguous().view(-1,1)*(length.log()+1))/((length+1).log()+1)
         cur_log_probs, topk_ids = cur_log_probs.view(batch_size,-1).topk(top_k)
-        cur_word =   (topk_ids % vocab_size)
+        cur_word =  topk_ids % vocab_size
         beam_coordinate = topk_ids // vocab_size
         cur_topk_probs = cur_log_probs.softmax(-1)
-        cur_topk_probs = (cur_topk_probs.masked_fill_(torch.cat([left_pad,cur_topk_probs.cumsum(-1)[:,:-1] > top_p],-1),-INF)/T).softmax(-1)
-        topb_ids = torch.multinomial(cur_topk_probs,num_beams + 1 )
+        cur_topp_probs = (cur_topk_probs.masked_fill_(torch.cat([left_pad,cur_topk_probs.cumsum(-1)[:,:-1] > top_p],-1),-INF)/T).softmax(-1)
+        topb_ids = torch.multinomial(cur_topp_probs, num_beams + 1 )
         cur_log_probs = cur_log_probs.gather(1,topb_ids)
         cur_word = cur_word.gather(1,topb_ids)
         beam_coordinate = beam_coordinate.gather(1,topb_ids)
