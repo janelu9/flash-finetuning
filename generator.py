@@ -56,7 +56,7 @@ def beam_search(self,input_ids,max_length =1024,num_beams =15):
         cur_log_probs,topk_ids = cur_log_probs.view(batch_size,-1).topk(num_beams+1)
 #         cur_log_probs = log_probs +cur_log_probs.contiguous().view(-1,1)
 #         cur_log_probs,topk_ids = cur_log_probs.view(batch_size,-1).topk(num_beams)
-        cur_word =   (topk_ids % vocab_size)
+        cur_word =  topk_ids % vocab_size
         beam_coordinate = topk_ids // vocab_size
         end_seqs = torch.cat([end_seqs,end_word],-1)
         end = cur_word == self.config.eos_token_id
