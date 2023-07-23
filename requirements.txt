@@ -5,4 +5,3 @@ sentencepiece
 accelerate
 deepspeed
 pyarrow
-tdqm
