@@ -53,6 +53,10 @@ parser.add_argument('--steps_per_print',
                     type=int,
                     default=10,
                     help='steps per print')
+parser.add_argument('--steps_per_eval',
+                    type=int,
+                    default=100,
+                    help='steps per eval')
 parser.add_argument('--steps_per_checkpoint',
                     type=int,
                     default=100,
@@ -61,7 +65,7 @@ parser.add_argument("--checkpoint_dir",
                     type=str,
                     default= "",
                     help="checkpoint dir")
-parser.add_argument('--max_checkpoint_num',
+parser.add_argument('--max_num_checkpoints',
                     type=int,
                     default=-1,
                     help='max checkpoint num')
@@ -85,7 +89,8 @@ parser = deepspeed.add_config_arguments(parser)
 
 args=parser.parse_args()
 args.model_path = "openlm-research/open_llama_13b"
-args.data_dir = "news-commentary-v13-zh-en_parquet"
+args.train_data_dir = "news-commentary-v13-zh-en_parquet"
+args.eval_data_dir = ""
 args.zero_stage=1
 args.num_train_epochs=1
 args.per_device_train_batch_size = 2
@@ -158,11 +163,11 @@ def main():
                               lr=args.learning_rate,
                               betas=(0.9, 0.95))
                               
-    data_dir = args.data_dir
-    data_files = [f for f in os.listdir(data_dir) if f[-4:] != '.crc']
+    train_data_dir = args.train_data_dir
+    data_files = [f for f in os.listdir(train_data_dir) if f[-4:] != '.crc']
     num_train_batch =sum(
-        np.ceil(float(open(os.path.join(data_dir,f)).read().strip())/args.per_device_train_batch_size/args.data_parallel_size)
-        for f in os.listdir(data_dir) if f[-4:] == '.crc') 
+        np.ceil(float(open(os.path.join(train_data_dir,f)).read().strip())/args.per_device_train_batch_size/args.data_parallel_size)
+        for f in os.listdir(train_data_dir) if f[-4:] == '.crc') 
     num_update_steps_per_epoch = np.ceil(
         num_train_batch / args.gradient_accumulation_steps )
     lr_scheduler = get_scheduler(
@@ -177,12 +182,15 @@ def main():
         model=model,
         optimizer=optimizer,
         lr_scheduler=lr_scheduler,)
+    
+    if args.eval_data_dir:
+        eval_data_files = [f for f in os.listdir(args.eval_data_dir) if f[-4:] != '.crc']
         
     checkpoint_memory=[]
     for epoch in range(args.num_train_epochs):
         accumulation_train_batches = 0
         for data_file in data_files:
-            data = pyarrow.parquet.read_table(os.path.join(data_dir,data_file))
+            data = pyarrow.parquet.read_table(os.path.join(train_data_dir,data_file))
             train_dataset = PromptDataset(
                 {k:data[k].to_numpy().tolist() 
                  for k in data.column_names})
@@ -205,8 +213,38 @@ def main():
             for step in range(cur_train_bacth_steps):
                 loss = engine.train_batch(data_iter=train_iter)
                 steps = engine.global_steps
+                if args.eval_data_dir and steps % args.steps_per_eval == 0:
+                    engine.eval()
+                    eval_loss = 0
+                    num_samples = 0
+                    for eval_data_file in eval_data_files:
+                        eval_data = pyarrow.parquet.read_table(os.path.join(args.eval_data_dir,eval_data_file))
+                        eval_dataset = PromptDataset(
+                            {k:eval_data[k].to_numpy().tolist()
+                             for k in eval_data.column_names})
+                        eval_dataloader = DataLoader(
+                            eval_dataset,
+                            collate_fn=PromptDataCollatorPipe(),
+                            num_workers = min(int(os.cpu_count()*0.8),args.gradient_accumulation_steps//2 + 1),
+                            shuffle=False,
+                            drop_last=False,
+                            batch_size=args.per_device_train_batch_size)
+                        eval_loader = RepeatingLoader(eval_dataloader)
+                        eval_iter = iter(eval_loader)
+                        cur_num_eval_bacth =int(np.ceil(len(eval_dataloader)/args.data_parallel_size))
+                        cur_eval_bacth_steps = int(np.ceil(cur_num_eval_bacth/args.gradient_accumulation_steps))
+                        for eval_step in range(cur_eval_bacth_steps):
+                            loss = engine.eval_batch(data_iter = eval_iter)
+                            num_samples += 1
+                            eval_loss += loss
+                        del eval_data
+                        del eval_dataset
+                        del eval_dataloader
+                        gc.collect()
+                    print_rank_0(f"************************ eval loss: {eval_loss/num_samples}************************ ",args.global_rank)
+                    engine.train()
                 if args.checkpoint_dir and steps % args.steps_per_checkpoint == 0:
-                    if args.max_checkpoint_num > 0 and args.max_checkpoint_num == len(checkpoint_memory):
+                    if args.max_num_checkpoints > 0 and args.max_num_checkpoints == len(checkpoint_memory):
                         oldest = checkpoint_memory.pop(0)
                         os.system(f"rm -rf {os.path.join(args.checkpoint_dir,str(oldest))}")
                     engine.save_checkpoint(args.checkpoint_dir,tag=steps)
@@ -217,7 +255,7 @@ def main():
             gc.collect()
             
     if args.checkpoint_dir:
-        if args.max_checkpoint_num>0 and args.max_checkpoint_num == len(checkpoint_memory):
+        if args.max_num_checkpoints>0 and args.max_num_checkpoints == len(checkpoint_memory):
             oldest = checkpoint_memory.pop(0)
             os.system(f"rm -rf {os.path.join(args.checkpoint_dir,str(steps))}")
         engine.save_checkpoint(args.checkpoint_dir,tag=steps)

@@ -66,7 +66,7 @@ def qa_generator(file):
 
 def token_qa(file,tokenizer):
     for sample in qa_generator(file):
-        inp_anses = sample.strip().split("\t") # data format: Input\tAnswer
+        inp_anses = sample.strip().split("\t") # example data format: Input\tAnswer, modify by your will.
         offsets=[0]
         inp_ans=inp_anses[:2]
         if len(inp_ans)==2:
