@@ -6,6 +6,7 @@
 
 from functools import partial
 from transformers import LlamaTokenizer
+from models.baichuan.tokenization_baichuan import BaichuanTokenizer
 from concurrent.futures import ThreadPoolExecutor,ProcessPoolExecutor
 import pyarrow.parquet
 import numpy as np
@@ -101,7 +102,7 @@ def token_qa(file,tokenizer):
                     ids.append(tokenizer.eos_token_id)
                     offsets.append(len(ids))
                     i += 2
-            pad = [tokenizer.pad_token_id]*(MAX_SEQ_LENGTH - offsets[-1] - 1)
+            pad = [tokenizer.pad_token_id]*(MAX_SEQ_LENGTH - offsets[-1])
             ids = ids[:min(MAX_SEQ_LENGTH,offsets[-1])-1]
             ids.append(tokenizer.eos_token_id)
             ids.extend(pad)
@@ -114,7 +115,7 @@ def token_qa(file,tokenizer):
             yield {"input_ids":input_ids,"labels":labels}
    
 def write_parquet(filename,output_dir,dtype,compression):
-    tokenizer = LlamaTokenizer.from_pretrained(args.tokenizer,fast_tokenizer=True)
+    tokenizer = LlamaTokenizer.from_pretrained(args.tokenizer, fast_tokenizer = True, add_bos_token = True)
     tokenizer.pad_token_id=0
     token = token_wiki
     batch_size = args.batch_size  # size of write batch

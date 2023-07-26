@@ -31,7 +31,9 @@ from torch.utils.data import DataLoader
 from deepspeed.utils import RepeatingLoader
 from deepspeed.ops.adam import DeepSpeedCPUAdam, FusedAdam
 from deepspeed.runtime.pipe.topology import PipeModelDataParallelTopology
-from pipeline_llama import LlamaForCausalLMPipe,LlamaCrossEntropyLoss
+from models.baichuan.modeling_baichuan import BaichuanConfig
+from models.baichuan.pipeline_baichuan import BaichuanForCausalLMPipe,CrossEntropyLoss
+from models.llama.pipeline_llama import LlamaForCausalLMPipe,LlamaCrossEntropyLoss
 import numpy as np
 import pyarrow.parquet
 import os

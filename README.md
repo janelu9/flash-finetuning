@@ -24,6 +24,31 @@ deepseed train_zero.py
 deepseed train_pipe.py
 ```
 
+#### Attentions
+
+If you want to switch to another model in the `models` folder,  modify these three places：
+
+**tokenizer**
+
+```python
+#convert_raws_to_ids.py: line 118
+tokenizer = LlamaTokenizer.from_pretrained(args.tokenizer, fast_tokenizer = True, add_bos_token = True)
+```
+
+**config**
+
+```python
+#train_pipe.py: line 140
+config = LlamaConfig.from_pretrained(args.model_path)
+```
+
+ **pipeline module**
+
+```python
+#train_pipe.py: line 146
+model = LlamaForCausalLMPipe(...)
+```
+
 ## Citation
 
 If you find EasyLLM useful or use EasyLLM  code  in your research, please cite it in your publications.
