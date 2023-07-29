@@ -4,6 +4,6 @@ transformers
 sentencepiece
 accelerate
 deepspeed
-flash-attn # >=2.0.0 requires A100
+flash-attn # flash-attn>=2.0.0 requires nvidia a100
 xformers>=0.0.20
 pyarrow
