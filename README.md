@@ -1,6 +1,6 @@
 # EasyLLM
 
-Running Large Language Model easily.
+Running Large Language Model easily and faster.
 
 ## Data Conversion
 
@@ -56,7 +56,7 @@ If you find EasyLLM useful or use EasyLLM  code  in your research, please cite i
 ```bibtex
 @misc{EasyLLM,
   author       = {Jian Lu},
-  title        = {EasyLLM: Running Large Language Model easily},
+  title        = {EasyLLM: Running Large Language Model easily and faster},
   year         = {2023},
   publisher    = {GitHub},
   journal      = {GitHub repository},
