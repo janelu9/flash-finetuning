@@ -28,21 +28,21 @@ deepseed train_pipe.py
 
 If you want to switch to another model in the `models` folder,  modify these three places：
 
-**tokenizer**
+**Tokenizer**
 
 ```python
 #convert_raws_to_ids.py: line 118
 tokenizer = LlamaTokenizer.from_pretrained(args.tokenizer, fast_tokenizer = True, add_bos_token = True)
 ```
 
-**config**
+**Model config**
 
 ```python
 #train_pipe.py: line 140
 config = LlamaConfig.from_pretrained(args.model_path)
 ```
 
- **pipeline module**
+ **Pipeline module**
 
 ```python
 #train_pipe.py: line 146

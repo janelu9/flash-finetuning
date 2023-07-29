@@ -26,14 +26,14 @@ from ds_utils import (
 from lora import (
     convert_linear_layer_to_lora,
     convert_lora_to_linear_layer,
-    only_optimize_lora_parameters)
+    only_optimize_lora_parameters) 
+from models.baichuan.modeling_baichuan import BaichuanConfig
+from models.baichuan.pipeline_baichuan import BaichuanForCausalLMPipe,CrossEntropyLoss
+from models.llama.pipeline_llama import LlamaForCausalLMPipe,LlamaCrossEntropyLoss
 from torch.utils.data import DataLoader
 from deepspeed.utils import RepeatingLoader
 from deepspeed.ops.adam import DeepSpeedCPUAdam, FusedAdam
 from deepspeed.runtime.pipe.topology import PipeModelDataParallelTopology
-from models.baichuan.modeling_baichuan import BaichuanConfig
-from models.baichuan.pipeline_baichuan import BaichuanForCausalLMPipe,CrossEntropyLoss
-from models.llama.pipeline_llama import LlamaForCausalLMPipe,LlamaCrossEntropyLoss
 import numpy as np
 import pyarrow.parquet
 import os
@@ -90,7 +90,7 @@ parser.add_argument('--only_optimize_lora',
 parser = deepspeed.add_config_arguments(parser)
 
 args=parser.parse_args()
-args.model_path = "openlm-research/open_llama_13b"
+args.model_path = "openlm-research/open_llama_13b/"
 args.train_data_dir = "news-commentary-v13-zh-en_parquet"
 args.eval_data_dir = ""
 args.zero_stage=1
@@ -100,12 +100,13 @@ args.gradient_accumulation_steps = 2
 args.seed=1234
 args.weight_decay=0.01
 args.lr_scheduler_type="cosine"
-args.num_warmup_steps=50
-args.learning_rate=1e-4
+args.num_warmup_steps=0
+args.learning_rate=1e-7
 args.output_dir = "./output"
 args.pipe_parallel_size = 1
 args.model_parallel_size = 1
 args.gradient_checkpointing = True
+args.fast = True
 
 if args.gradient_checkpointing and args.lora_dim > 0:
     assert (
@@ -146,10 +147,14 @@ def main():
     model = LlamaForCausalLMPipe(
         config,
         args.gradient_checkpointing,
-        loss_fn=LlamaCrossEntropyLoss(),
+        args.fast,
+        loss_fn=CrossEntropyLoss(),
         topology=topo,
-        base_seed=args.seed,)                             
+        base_seed=args.seed,)
+        
+    #model.bfloat16()  
     model.from_pretrained(args.model_path)
+    
     if args.lora_dim > 0:
         model = convert_linear_layer_to_lora(
             model,
@@ -166,7 +171,7 @@ def main():
                               betas=(0.9, 0.95))
                               
     train_data_dir = args.train_data_dir
-    data_files = [f for f in os.listdir(train_data_dir) if f[-4:] != '.crc']
+    train_data_files = [f for f in os.listdir(train_data_dir) if f[-4:] != '.crc']
     num_train_batch =sum(
         np.ceil(float(open(os.path.join(train_data_dir,f)).read().strip())/args.per_device_train_batch_size/args.data_parallel_size)
         for f in os.listdir(train_data_dir) if f[-4:] == '.crc') 
@@ -183,7 +188,10 @@ def main():
         config=ds_config,
         model=model,
         optimizer=optimizer,
-        lr_scheduler=lr_scheduler,)
+        lr_scheduler=lr_scheduler,
+        )
+        
+    #engine.bfloat16()
     
     if args.eval_data_dir:
         eval_data_files = [f for f in os.listdir(args.eval_data_dir) if f[-4:] != '.crc']
@@ -191,11 +199,11 @@ def main():
     checkpoint_memory=[]
     for epoch in range(args.num_train_epochs):
         accumulation_train_batches = 0
-        for data_file in data_files:
-            data = pyarrow.parquet.read_table(os.path.join(train_data_dir,data_file))
+        for train_data_file in train_data_files:
+            train_data = pyarrow.parquet.read_table(os.path.join(train_data_dir,train_data_file))
             train_dataset = PromptDataset(
-                {k:data[k].to_numpy().tolist() 
-                 for k in data.column_names})
+                {k:train_data[k].to_numpy().tolist() 
+                 for k in train_data.column_names})
             train_dataloader = DataLoader(
                 train_dataset,
                 collate_fn=PromptDataCollatorPipe(),
@@ -206,7 +214,7 @@ def main():
             cur_num_train_bacth =int(np.ceil(len(train_dataloader)/args.data_parallel_size))
             accumulation_train_batches += cur_num_train_bacth
             print_rank_0(
-                f"Beginning of Epoch {epoch+1}/{args.num_train_epochs}, Data file: {data_file}, Total Micro Batches: {accumulation_train_batches}/{int(num_train_batch)}",
+                f"Beginning of Epoch {epoch+1}/{args.num_train_epochs}, Data file: {train_data_file}, Total Micro Batches: {accumulation_train_batches}/{int(num_train_batch)}",
                 args.global_rank)
             print_rank_0(args, args.global_rank)
             train_loader = RepeatingLoader(train_dataloader)
@@ -250,7 +258,7 @@ def main():
                         os.system(f"rm -rf {os.path.join(args.checkpoint_dir,str(oldest))}")
                     engine.save_checkpoint(args.checkpoint_dir,tag=steps)
                     checkpoint_memory.append(steps)
-            del data
+            del train_data
             del train_dataset
             del train_dataloader
             gc.collect()
