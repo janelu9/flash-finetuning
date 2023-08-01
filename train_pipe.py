@@ -61,7 +61,7 @@ parser.add_argument('--steps_per_eval',
                     help='steps per eval')
 parser.add_argument('--steps_per_checkpoint',
                     type=int,
-                    default=100,
+                    default=-1,
                     help='steps per checkpoint')
 parser.add_argument("--checkpoint_dir",
                     type=str,
@@ -100,7 +100,7 @@ args.gradient_accumulation_steps = 2
 args.seed=1234
 args.weight_decay=0.01
 args.lr_scheduler_type="cosine"
-args.num_warmup_steps=100
+args.num_warmup_steps=0
 args.learning_rate=3e-4
 args.output_dir = "./output"
 args.pipe_parallel_size = 1
@@ -172,6 +172,10 @@ def main():
                               
     train_data_dir = args.train_data_dir
     train_data_files = [f for f in os.listdir(train_data_dir) if f[-4:] != '.crc']
+    train_data_files.sort()
+    np.random.seed(1234)
+    np.random.shuffle(train_data_files)
+    
     num_train_batch =sum(
         np.ceil(float(open(os.path.join(train_data_dir,f)).read().strip())/args.per_device_train_batch_size/args.data_parallel_size)
         for f in os.listdir(train_data_dir) if f[-4:] == '.crc') 
@@ -195,6 +199,10 @@ def main():
     
     if args.eval_data_dir:
         eval_data_files = [f for f in os.listdir(args.eval_data_dir) if f[-4:] != '.crc']
+        
+    skip_steps = 10
+    if args.steps_per_checkpoint == -1:
+        args.steps_per_checkpoint = num_update_steps_per_epoch + skip_steps
         
     checkpoint_memory=[]
     for epoch in range(args.num_train_epochs):
@@ -241,7 +249,7 @@ def main():
                             batch_size=args.per_device_train_batch_size)
                         eval_loader = RepeatingLoader(eval_dataloader)
                         eval_iter = iter(eval_loader)
-                        cur_eval_bacth_steps = int(np.ceil(len(eval_dataloader)/args.data_parallel_size/args.gradient_accumulation_steps))
+                        cur_eval_bacth_steps = int(np.ceil(len(eval_dataloader)/args.data_parallel_size/args.gradient_accumulation_steps)) +skip_steps
                         for eval_step in range(cur_eval_bacth_steps):
                             loss = engine.eval_batch(data_iter = eval_iter)
                             num_samples += 1
