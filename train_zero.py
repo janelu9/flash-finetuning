@@ -132,6 +132,10 @@ def main():
                               
     data_dir = args.data_dir
     data_files = [f for f in os.listdir(data_dir) if f[-4:] != '.crc']
+    data_files.sort()
+    np.random.seed(1234)
+    np.random.shuffle(data_files)
+    
     num_train_batch =sum(
         np.ceil(float(open(os.path.join(data_dir,f)).read().strip())
                 /args.per_device_train_batch_size
