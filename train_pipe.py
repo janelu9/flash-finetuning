@@ -150,7 +150,9 @@ def main():
         args.fast,
         loss_fn=CrossEntropyLoss(),
         topology=topo,
-        base_seed=args.seed,)
+        base_seed=args.seed,
+        partition_method="type:DecoderLayer",
+        )
         
     #model.bfloat16()  
     model.from_pretrained(args.model_path)

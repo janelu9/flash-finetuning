@@ -70,7 +70,7 @@ def get_train_ds_config(offload,
         "activation_checkpointing" :activation_checkpointing,
         "fp16": {
             "enabled": True,
-            "loss_scale_window": 100
+            "loss_scale_window": 1000
         },
         "gradient_clipping": 1.0,
         "prescale_gradients": False,
