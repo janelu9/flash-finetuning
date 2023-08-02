@@ -189,14 +189,18 @@ def main():
         optimizer=optimizer,
         lr_scheduler=lr_scheduler,
         )
-        
-    train_data_files = [f for f in os.listdir(args.train_data_dir) if f[-4:] != '.crc']
-    train_data_files.sort()
+    '''
+    How many folders, how many partitions. 
+    If you want to load the data into memory at one time, moving all the parquet files to same folder. 
+    That may cause "num_update_steps_per_epoch" to be un-precision. But it donesn't matter.
+    '''
+    train_data_partitions = [f for f in os.listdir(args.train_data_dir) if f[-4:] != '.crc']
+    train_data_partitions.sort()
     np.random.seed(1234)
-    np.random.shuffle(train_data_files)
+    np.random.shuffle(train_data_partitions)
     
     if args.eval_data_dir:
-        eval_data_files = [f for f in os.listdir(args.eval_data_dir) if f[-4:] != '.crc']
+        eval_data_partitions = [f for f in os.listdir(args.eval_data_dir) if f[-4:] != '.crc']
         
     skip_steps = 10
     if args.steps_per_checkpoint == -1:
@@ -205,16 +209,16 @@ def main():
     checkpoint_memory=[]
     for epoch in range(args.num_train_epochs):
         accumulation_train_batches = 0
-        for train_data_file in train_data_files:
+        for train_data_partition in train_data_partitions:
             try:
-                train_data = pyarrow.parquet.read_table(os.path.join(args.train_data_dir,train_data_file))
+                train_data = pyarrow.parquet.read_table(os.path.join(args.train_data_dir,train_data_partition))
                 train_dataset = PromptDataset(
                     {k:train_data[k].to_numpy().tolist() 
                      for k in train_data.column_names})
             except:
                 continue
             print_rank_0(
-                f"Beginning of Epoch {epoch+1}/{args.num_train_epochs}, Data file: {train_data_file}.",
+                f"Beginning of Epoch {epoch+1}/{args.num_train_epochs}, Data file: {train_data_partition}.",
                 args.global_rank)
             train_dataloader = DataLoader(
                 train_dataset,
@@ -231,7 +235,7 @@ def main():
             print_rank_0(args, args.global_rank)
             train_loader = RepeatingLoader(train_dataloader)
             train_iter = iter(train_loader)
-            cur_train_bacth_steps = int(np.ceil(cur_num_train_bacth/args.gradient_accumulation_steps))+20#few steps may be skipped
+            cur_train_bacth_steps = int(np.ceil(cur_num_train_bacth/args.gradient_accumulation_steps)) + skip_steps #few steps may be skipped
             for step in range(cur_train_bacth_steps):
                 loss = engine.train_batch(data_iter=train_iter)
                 steps = engine.global_steps
@@ -239,8 +243,8 @@ def main():
                     engine.eval()
                     eval_loss = 0
                     num_samples = 0
-                    for eval_data_file in eval_data_files:
-                        eval_data = pyarrow.parquet.read_table(os.path.join(args.eval_data_dir,eval_data_file))
+                    for eval_data_partition in eval_data_partitions:
+                        eval_data = pyarrow.parquet.read_table(os.path.join(args.eval_data_dir,eval_data_partition))
                         eval_dataset = PromptDataset(
                             {k:eval_data[k].to_numpy().tolist()
                              for k in eval_data.column_names})

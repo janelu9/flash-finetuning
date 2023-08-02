@@ -31,22 +31,22 @@ If you want to switch to another model in the `models` folder,  modify these thr
 **Tokenizer**
 
 ```python
-#convert_raws_to_ids.py: line 118
+#convert_raws_to_ids.py:
 tokenizer = LlamaTokenizer.from_pretrained(args.tokenizer, fast_tokenizer = True, add_bos_token = True)
 ```
 
 **Model config**
 
 ```python
-#train_pipe.py: line 140
+#train_pipe.py:
 config = LlamaConfig.from_pretrained(args.model_path)
 ```
 
  **Pipeline module**
 
 ```python
-#train_pipe.py: line 146
-model = LlamaForCausalLMPipe(...)
+#train_pipe.py:
+model = LlamaForCausalLMPipe(...
 ```
 
 ## Citation
