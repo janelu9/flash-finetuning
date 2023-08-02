@@ -153,8 +153,7 @@ def main():
         base_seed=args.seed,
         partition_method="type:DecoderLayer",
         )
-        
-    #model.bfloat16()  
+         
     model.from_pretrained(args.model_path)
     
     if args.lora_dim > 0:
@@ -172,15 +171,9 @@ def main():
                               lr=args.learning_rate,
                               betas=(0.9, 0.95))
                               
-    train_data_dir = args.train_data_dir
-    train_data_files = [f for f in os.listdir(train_data_dir) if f[-4:] != '.crc']
-    train_data_files.sort()
-    np.random.seed(1234)
-    np.random.shuffle(train_data_files)
-    
     num_train_batch =sum(
-        np.ceil(float(open(os.path.join(train_data_dir,f)).read().strip())/args.per_device_train_batch_size/args.data_parallel_size)
-        for f in os.listdir(train_data_dir) if f[-4:] == '.crc') 
+        np.ceil(float(open(os.path.join(args.train_data_dir,f)).read().strip())/args.per_device_train_batch_size/args.data_parallel_size)
+        for f in os.listdir(args.train_data_dir) if f[-4:] == '.crc') 
     num_update_steps_per_epoch = np.ceil(
         num_train_batch / args.gradient_accumulation_steps )
     lr_scheduler = get_scheduler(
@@ -197,7 +190,10 @@ def main():
         lr_scheduler=lr_scheduler,
         )
         
-    #engine.bfloat16()
+    train_data_files = [f for f in os.listdir(args.train_data_dir) if f[-4:] != '.crc']
+    train_data_files.sort()
+    np.random.seed(1234)
+    np.random.shuffle(train_data_files)
     
     if args.eval_data_dir:
         eval_data_files = [f for f in os.listdir(args.eval_data_dir) if f[-4:] != '.crc']
@@ -210,10 +206,16 @@ def main():
     for epoch in range(args.num_train_epochs):
         accumulation_train_batches = 0
         for train_data_file in train_data_files:
-            train_data = pyarrow.parquet.read_table(os.path.join(train_data_dir,train_data_file))
-            train_dataset = PromptDataset(
-                {k:train_data[k].to_numpy().tolist() 
-                 for k in train_data.column_names})
+            try:
+                train_data = pyarrow.parquet.read_table(os.path.join(args.train_data_dir,train_data_file))
+                train_dataset = PromptDataset(
+                    {k:train_data[k].to_numpy().tolist() 
+                     for k in train_data.column_names})
+            except:
+                continue
+            print_rank_0(
+                f"Beginning of Epoch {epoch+1}/{args.num_train_epochs}, Data file: {train_data_file}.",
+                args.global_rank)
             train_dataloader = DataLoader(
                 train_dataset,
                 collate_fn=PromptDataCollatorPipe(),
@@ -224,7 +226,7 @@ def main():
             cur_num_train_bacth =int(np.ceil(len(train_dataloader)/args.data_parallel_size))
             accumulation_train_batches += cur_num_train_bacth
             print_rank_0(
-                f"Beginning of Epoch {epoch+1}/{args.num_train_epochs}, Data file: {train_data_file}, Total Micro Batches: {accumulation_train_batches}/{int(num_train_batch)}",
+                f" Total Micro Batches: {accumulation_train_batches}/{int(num_train_batch)}.",
                 args.global_rank)
             print_rank_0(args, args.global_rank)
             train_loader = RepeatingLoader(train_dataloader)

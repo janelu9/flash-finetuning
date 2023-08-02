@@ -38,7 +38,10 @@ def wiki_generator(file,sep="\n\n"):
         while line:
             doc+=line
             if doc[-2:]==sep:
-                yield clean_wikitext(doc)
+                p=0;l=len(doc)
+                while p<l:
+                    yield clean_wikitext(doc[p:p+100000])
+                    p += 100000 - 1024
                 doc=""
             line = f.readline()  
         if doc:
