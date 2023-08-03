@@ -272,18 +272,18 @@ def main():
                     if args.max_num_checkpoints > 0 and args.max_num_checkpoints == len(checkpoint_memory):
                         oldest = checkpoint_memory.pop(0)
                         os.system(f"rm -rf {os.path.join(args.checkpoint_dir,str(oldest))}")
-                    engine.save_checkpoint(args.checkpoint_dir,tag=steps)
+                    engine.save_checkpoint(args.checkpoint_dir,tag = steps)
                     checkpoint_memory.append(steps)
             del train_data
             del train_dataset
             del train_dataloader
             gc.collect()
             
-    if args.checkpoint_dir:
+    if args.checkpoint_dir and args.steps_per_checkpoint != num_update_steps_per_epoch + skip_steps:
         if args.max_num_checkpoints>0 and args.max_num_checkpoints == len(checkpoint_memory):
             oldest = checkpoint_memory.pop(0)
-            os.system(f"rm -rf {os.path.join(args.checkpoint_dir,str(steps))}")
-        engine.save_checkpoint(args.checkpoint_dir,tag=steps)
+            os.system(f"rm -rf {os.path.join(args.checkpoint_dir,str(oldest))}")
+        engine.save_checkpoint(args.checkpoint_dir,tag = steps)
         
     if args.output_dir:
         if not os.path.exists(args.output_dir) and args.global_rank == 0:
