@@ -96,14 +96,14 @@ args.eval_data_dir = ""
 args.zero_stage=1
 args.num_train_epochs=1
 args.per_device_train_batch_size = 2
-args.gradient_accumulation_steps = 2
+args.gradient_accumulation_steps = 64
 args.seed=1234
 args.weight_decay=0.01
 args.lr_scheduler_type="cosine"
 args.num_warmup_steps=0
 args.learning_rate=3e-4
 args.output_dir = "./output"
-args.pipe_parallel_size = 1
+args.pipe_parallel_size = 8
 args.model_parallel_size = 1
 args.gradient_checkpointing = True
 args.fast = True
@@ -196,8 +196,6 @@ def main():
     '''
     train_data_partitions = [f for f in os.listdir(args.train_data_dir) if f[-4:] != '.crc']
     train_data_partitions.sort()
-    np.random.seed(1234)
-    np.random.shuffle(train_data_partitions)
     
     if args.eval_data_dir:
         eval_data_partitions = [f for f in os.listdir(args.eval_data_dir) if f[-4:] != '.crc']
@@ -209,6 +207,8 @@ def main():
     checkpoint_memory=[]
     for epoch in range(args.num_train_epochs):
         accumulation_train_batches = 0
+        np.random.seed(1234)
+        np.random.shuffle(train_data_partitions)
         for train_data_partition in train_data_partitions:
             try:
                 train_data = pyarrow.parquet.read_table(os.path.join(args.train_data_dir,train_data_partition))

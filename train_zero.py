@@ -76,12 +76,12 @@ args.model_path = "openlm-research/open_llama_13b"
 args.data_dir = "news-commentary-v13-zh-en_parquet"
 args.zero_stage=3
 args.num_train_epochs=1
-args.per_device_train_batch_size = 2
+args.per_device_train_batch_size = 1
 args.gradient_accumulation_steps =1
 args.seed=1234
 args.weight_decay=0.01
 args.lr_scheduler_type="cosine"
-args.num_warmup_steps=500
+args.num_warmup_steps=0
 args.learning_rate=1e-4
 args.output_dir = "./output"
 args.gradient_checkpointing = True
@@ -133,8 +133,6 @@ def main():
     data_dir = args.data_dir
     data_files = [f for f in os.listdir(data_dir) if f[-4:] != '.crc']
     data_files.sort()
-    np.random.seed(1234)
-    np.random.shuffle(data_files)
     
     num_train_batch =sum(
         np.ceil(float(open(os.path.join(data_dir,f)).read().strip())
@@ -191,6 +189,8 @@ def main():
     
     for epoch in range(args.num_train_epochs):
         accumulation_train_batches = 0
+        np.random.seed(1234)
+        np.random.shuffle(data_files)
         for data_file in data_files:
             data = pyarrow.parquet.read_table(os.path.join(data_dir,data_file))
             train_dataset = PromptDataset({k:data[k].to_numpy().tolist() 
