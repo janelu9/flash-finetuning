@@ -130,7 +130,7 @@ def write_parquet(filename,output_dir,dtype,compression):
     item_iter = token(filename,tokenizer)
     file = os.path.splitext(os.path.basename(filename))[0]
     out_dir = os.path.join(output_dir , file)
-    out_file = os.path.join(out_dir , f"part-%05d.{compression}.parquet")
+    out_file = os.path.join(out_dir , f"{file}-part-%05d.{compression}.parquet")
     check_file = os.path.join(output_dir , "." + file + ".crc")
     if os.path.exists(check_file):
         print(f"{out_file} exists, continue!")

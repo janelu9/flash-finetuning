@@ -8,6 +8,7 @@ import torch
 import deepspeed
 from ds_utils import (
     print_rank_0,
+    shuffle_rank_0,
     to_device,
     save_hf_format,
     set_random_seed,
@@ -131,7 +132,7 @@ def main():
                               betas=(0.9, 0.95))
                               
     data_dir = args.data_dir
-    data_files = [f for f in os.listdir(data_dir) if f[-4:] != '.crc']
+    data_files = [os.path.join(data_dir,f) for f in os.listdir(data_dir) if f[-4:] != '.crc']
     data_files.sort()
     
     num_train_batch =sum(
@@ -189,12 +190,15 @@ def main():
     
     for epoch in range(args.num_train_epochs):
         accumulation_train_batches = 0
-        np.random.seed(1234)
-        np.random.shuffle(data_files)
+        shuffle_rank_0(data_files,args.global_rank)
         for data_file in data_files:
-            data = pyarrow.parquet.read_table(os.path.join(data_dir,data_file))
-            train_dataset = PromptDataset({k:data[k].to_numpy().tolist() 
-                                           for k in data.column_names})
+            try:
+                data = pyarrow.parquet.read_table(data_file)
+                train_dataset = PromptDataset(
+                    {k:data[k].to_numpy().tolist() 
+                    for k in data.column_names})
+            except:
+                continue
             train_dataloader = DataLoader(
                 train_dataset,
                 collate_fn = PromptDataCollator(),

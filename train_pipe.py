@@ -13,6 +13,7 @@ from transformers import (
     get_scheduler,)
 from ds_utils import (
     print_rank_0,
+    shuffle_rank_0,
     to_device,
     save_hf_format,
     set_random_seed,
@@ -96,7 +97,7 @@ args.eval_data_dir = ""
 args.zero_stage=1
 args.num_train_epochs=1
 args.per_device_train_batch_size = 2
-args.gradient_accumulation_steps = 64
+args.gradient_accumulation_steps = 2
 args.seed=1234
 args.weight_decay=0.01
 args.lr_scheduler_type="cosine"
@@ -194,11 +195,11 @@ def main():
     If you want to load the data into memory at one time, moving all the parquet files to same folder. 
     That may cause "num_update_steps_per_epoch" to be un-precision. But it donesn't matter.
     '''
-    train_data_partitions = [f for f in os.listdir(args.train_data_dir) if f[-4:] != '.crc']
+    train_data_partitions = [os.path.join(args.train_data_dir,f) for f in os.listdir(args.train_data_dir) if f[-4:] != '.crc']
     train_data_partitions.sort()
     
     if args.eval_data_dir:
-        eval_data_partitions = [f for f in os.listdir(args.eval_data_dir) if f[-4:] != '.crc']
+        eval_data_partitions = [os.path.join(args.eval_data_dir,f) for f in os.listdir(args.eval_data_dir) if f[-4:] != '.crc']
         
     skip_steps = 10
     if args.steps_per_checkpoint == -1:
@@ -207,11 +208,10 @@ def main():
     checkpoint_memory=[]
     for epoch in range(args.num_train_epochs):
         accumulation_train_batches = 0
-        np.random.seed(1234)
-        np.random.shuffle(train_data_partitions)
+        shuffle_rank_0(train_data_partitions,args.global_rank)
         for train_data_partition in train_data_partitions:
             try:
-                train_data = pyarrow.parquet.read_table(os.path.join(args.train_data_dir,train_data_partition))
+                train_data = pyarrow.parquet.read_table(train_data_partition)
                 train_dataset = PromptDataset(
                     {k:train_data[k].to_numpy().tolist() 
                      for k in train_data.column_names})
@@ -244,7 +244,7 @@ def main():
                     eval_loss = 0
                     num_samples = 0
                     for eval_data_partition in eval_data_partitions:
-                        eval_data = pyarrow.parquet.read_table(os.path.join(args.eval_data_dir,eval_data_partition))
+                        eval_data = pyarrow.parquet.read_table(eval_data_partition)
                         eval_dataset = PromptDataset(
                             {k:eval_data[k].to_numpy().tolist()
                              for k in eval_data.column_names})

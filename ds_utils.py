@@ -68,10 +68,9 @@ def get_train_ds_config(offload,
         "zero_allow_untested_optimizer": True,
         "zero_optimization": zero_opt_dict,
         "activation_checkpointing" :activation_checkpointing,
-        "fp16": {
-            "enabled": True,
-            "loss_scale_window": 1000
-        },
+        "fp16": {"enabled": True,"loss_scale_window": 1000},
+        #"bf16": {"enabled": True},
+
         "gradient_clipping": 1.0,
         "prescale_gradients": False,
         "wall_clock_breakdown": False,
@@ -114,6 +113,16 @@ def print_rank_0(msg, rank=0):
     if rank <= 0:
         print(msg)
 
+def shuffle_rank_0(train_data_partitions,rank=0):
+    if rank==0:
+        np.random.seed(1234)
+        files = sum([[os.path.join(d,f) for f in os.listdir(d) if f[-8:] == '.parquet'] for d in train_data_partitions],[])
+        np.random.shuffle(files)
+        num_partitions = len(train_data_partitions)
+        for i,f in enumerate(files):
+            os.system(f"mv {f} {train_data_partitions[i%num_partitions]}/")
+    torch.distributed.barrier()
+    
 
 def to_device(batch, device):
     output = {}

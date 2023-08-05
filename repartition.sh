@@ -23,12 +23,11 @@ done
 i=0
 for f in `find -name *.parquet|sort|shuf`
 do
-	d=${f%/*}
-	mv $f `printf "part-%05d/${d##*/}-${f##*/}" $((i%$partition_num))`
+	mv $f `printf "part-%05d/" $((i%$partition_num))`
 	i=$((i+1))
 done
 
 crc=`ls .*.crc`
-cat $crc|awk '{sum+=$1} END {print sum}'>.crc
+cat $crc|awk '{sum+=$1} END {print sum}'>.all.crc
 
 rm -rf $cur_partitions $crc
