@@ -190,7 +190,7 @@ def main():
     
     for epoch in range(args.num_train_epochs):
         accumulation_train_batches = 0
-        shuffle_rank_0(data_files,args.global_rank)
+        shuffle_rank_0(data_files,args.global_rank,epoch)
         for data_file in data_files:
             try:
                 data = pyarrow.parquet.read_table(data_file)

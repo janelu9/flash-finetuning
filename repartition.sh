@@ -21,7 +21,7 @@ do
 done
 
 i=0
-for f in `find -name *.parquet|sort|shuf`
+for f in `find -name *.parquet|sort`
 do
 	mv $f `printf "part-%05d/" $((i%$partition_num))`
 	i=$((i+1))

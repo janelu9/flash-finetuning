@@ -91,13 +91,13 @@ parser.add_argument('--only_optimize_lora',
 parser = deepspeed.add_config_arguments(parser)
 
 args=parser.parse_args()
-args.model_path = "openlm-research/open_llama_13b/"
+args.model_path = "Baichuan_13B_Chat/micro"
 args.train_data_dir = "news-commentary-v13-zh-en_parquet"
 args.eval_data_dir = ""
 args.zero_stage=1
 args.num_train_epochs=1
 args.per_device_train_batch_size = 2
-args.gradient_accumulation_steps = 2
+args.gradient_accumulation_steps = 8
 args.seed=1234
 args.weight_decay=0.01
 args.lr_scheduler_type="cosine"
@@ -139,13 +139,13 @@ def main():
         os.system(f"mkdir -p {args.checkpoint_dir}")
     torch.distributed.barrier()
 
-    config=LlamaConfig.from_pretrained(args.model_path)
+    config=BaichuanConfig.from_pretrained(args.model_path)
     topo = PipeModelDataParallelTopology(
         num_pp = args.pipe_parallel_size,
         num_mp = args.model_parallel_size,
         num_dp = args.data_parallel_size)
     args.seed = args.seed + topo.get_coord(args.global_rank).pipe
-    model = LlamaForCausalLMPipe(
+    model = BaichuanForCausalLMPipe(
         config,
         args.gradient_checkpointing,
         args.fast,
@@ -154,7 +154,7 @@ def main():
         base_seed=args.seed,
         partition_method="type:DecoderLayer",
         )
-         
+    
     model.from_pretrained(args.model_path)
     
     if args.lora_dim > 0:
@@ -190,6 +190,7 @@ def main():
         optimizer=optimizer,
         lr_scheduler=lr_scheduler,
         )
+
     '''
     How many folders, how many partitions. 
     If you want to load the data into memory at one time, moving all the parquet files to same folder. 
@@ -208,7 +209,7 @@ def main():
     checkpoint_memory=[]
     for epoch in range(args.num_train_epochs):
         accumulation_train_batches = 0
-        shuffle_rank_0(train_data_partitions,args.global_rank)
+        shuffle_rank_0(train_data_partitions,args.global_rank,epoch)
         for train_data_partition in train_data_partitions:
             try:
                 train_data = pyarrow.parquet.read_table(train_data_partition)
