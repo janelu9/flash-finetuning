@@ -114,15 +114,16 @@ def print_rank_0(msg, rank=0):
         print(msg)
 
 def shuffle_rank_0(train_data_partitions,rank=0,seed=1234):
-    if rank==0: 
+    if rank == 0: 
         files = sum([[(d,f) for f in os.listdir(d) if f[-8:] == '.parquet'] for d in train_data_partitions],[])
-        np.random.seed(seed)
-        np.random.shuffle(files)
         num_partitions = len(train_data_partitions)
-        for i,(d,f) in enumerate(files):
-            target_dir = train_data_partitions[i%num_partitions]
-            if d != target_dir:
-                os.system(f"mv {os.path.join(d,f)} {target_dir}/")
+        if num_partitions > 1:
+            np.random.seed(seed)
+            np.random.shuffle(files)
+            for i,(d,f) in enumerate(files):
+                target_dir = train_data_partitions[i%num_partitions]
+                if d != target_dir:
+                    os.system(f"mv {os.path.join(d,f)} {target_dir}/")
     torch.distributed.barrier()
     
 
