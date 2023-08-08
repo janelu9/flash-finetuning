@@ -4,18 +4,11 @@ set -e
 
 cd $1
 cur_partitions=`ls`
-cur_num=`echo $cur_partitions |wc -w`
+prefix="part"
 
-if [ $cur_num -gt $2 ] 
-then
-	partition_num=$2
-else
-	partition_num=$cur_num
-fi
-
-for ((i=0;i<$partition_num ;i++))
+for ((i=0;i<$2 ;i++))
 do
-	file=`printf "part-%05d" $i`
+	file=`printf "$prefix-%05d" $i`
 	rm -rf $file
 	mkdir $file
 done
@@ -23,11 +16,11 @@ done
 i=0
 for f in `find -name *.parquet|sort`
 do
-	mv $f `printf "part-%05d/" $((i%$partition_num))`
+	mv $f `printf "$prefix-%05d/" $((i%$2))`
 	i=$((i+1))
 done
 
 crc=`ls .*.crc`
-cat $crc|awk '{sum+=$1} END {print sum}'>.all.crc
+cat $crc|awk '{sum+=$1} END {print sum}'>.$2.crc
 
 rm -rf $cur_partitions $crc
