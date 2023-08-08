@@ -32,8 +32,8 @@ from lora import (
     only_optimize_lora_parameters)
 from transformers.deepspeed import HfDeepSpeedConfig
 from deepspeed.ops.adam import DeepSpeedCPUAdam, FusedAdam
-from torch.utils.data import DataLoader
-from torch.utils.data.distributed import DistributedSampler
+from torch.utils.train_data import DataLoader
+from torch.utils.train_data.distributed import DistributedSampler
 import numpy as np
 import os
 import gc
@@ -144,7 +144,7 @@ def main():
     lr_scheduler = get_scheduler(
         name=args.lr_scheduler_type,
         optimizer=optimizer,
-        num_warmup_steps=args.num_warmup_steps,
+        num_warmup_steps = args.num_warmup_steps if args.num_warmup_steps >= 1 else int(args.num_warmup_steps * num_update_steps_per_epoch),
         num_training_steps=args.num_train_epochs * num_update_steps_per_epoch,)       
     
     model,*_ = deepspeed.initialize(
@@ -190,12 +190,12 @@ def main():
     for epoch in range(args.num_train_epochs):
         accumulation_train_batches = 0
         shuffle_rank_0(train_data_partitions,args.global_rank,epoch)
-        for data_file in train_data_partitions:
+        for train_data_partition in train_data_partitions:
             try:
-                data = pyarrow.parquet.read_table(data_file)
+                train_data = pyarrow.parquet.read_table(train_data_partition)
                 train_dataset = PromptDataset(
-                    {k:data[k].to_numpy().tolist() 
-                    for k in data.column_names})
+                    {k:train_data[k].to_numpy().tolist() 
+                    for k in train_data.column_names})
             except:
                 continue
             train_dataloader = DataLoader(
@@ -205,7 +205,7 @@ def main():
                 batch_size = args.per_device_train_batch_size)
             accumulation_train_batches += len(train_dataloader)
             print_rank_0(
-                f"Beginning of Epoch {epoch+1}/{args.num_train_epochs}, Data File: {data_file}, Total Micro Batches: {accumulation_train_batches}/{int(num_train_batch)}",
+                f"Beginning of Epoch {epoch+1}/{args.num_train_epochs}, Data File: {train_data_partition}, Total Micro Batches: {accumulation_train_batches}/{int(num_train_batch)}",
                 args.global_rank)
             print_rank_0(args, args.global_rank)
             model.train()
@@ -219,7 +219,7 @@ def main():
                     print_rank_0(f"loss: {loss.item()}", args.global_rank)
             # Evaluate perplexity on the validation set.
             # perplexity = evaluation(model, eval_dataloader)
-            del data
+            del train_data
             del train_dataset
             del train_dataloader
             gc.collect()

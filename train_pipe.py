@@ -104,7 +104,7 @@ args.lr_scheduler_type="cosine"
 args.num_warmup_steps=0
 args.learning_rate=3e-4
 args.output_dir = "./output"
-args.pipe_parallel_size = 8
+args.pipe_parallel_size = 1
 args.model_parallel_size = 1
 args.gradient_checkpointing = True
 args.fast = True
@@ -187,7 +187,7 @@ def main():
     lr_scheduler = get_scheduler(
         name=args.lr_scheduler_type,
         optimizer=optimizer,
-        num_warmup_steps=args.num_warmup_steps,
+        num_warmup_steps=args.num_warmup_steps if args.num_warmup_steps >= 1 else int(args.num_warmup_steps * num_update_steps_per_epoch),
         num_training_steps=args.num_train_epochs * num_update_steps_per_epoch,)      
     
     engine, *_ = deepspeed.initialize(
