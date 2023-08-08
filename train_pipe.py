@@ -91,13 +91,13 @@ parser.add_argument('--only_optimize_lora',
 parser = deepspeed.add_config_arguments(parser)
 
 args=parser.parse_args()
-args.model_path = "Baichuan_13B_Chat/micro"
+args.model_path = "openlm-research/open_llama_13b"
 args.train_data_dir = "news-commentary-v13-zh-en_parquet"
 args.eval_data_dir = ""
 args.zero_stage=1
 args.num_train_epochs=1
 args.per_device_train_batch_size = 2
-args.gradient_accumulation_steps = 8
+args.gradient_accumulation_steps = 2
 args.seed=1234
 args.weight_decay=0.01
 args.lr_scheduler_type="cosine"
@@ -139,13 +139,13 @@ def main():
         os.system(f"mkdir -p {args.checkpoint_dir}")
     torch.distributed.barrier()
 
-    config=BaichuanConfig.from_pretrained(args.model_path)
+    config=LlamaConfig.from_pretrained(args.model_path)
     topo = PipeModelDataParallelTopology(
         num_pp = args.pipe_parallel_size,
         num_mp = args.model_parallel_size,
         num_dp = args.data_parallel_size)
     args.seed = args.seed + topo.get_coord(args.global_rank).pipe
-    model = BaichuanForCausalLMPipe(
+    model = LlamaForCausalLMPipe(
         config,
         args.gradient_checkpointing,
         args.fast,
@@ -172,11 +172,18 @@ def main():
                               lr=args.learning_rate,
                               betas=(0.9, 0.95))
                               
+    '''
+    How many folders, how many partitions. 
+    If you want to load the data into memory at one time, moving all the parquet files to same folder. 
+    That may cause "num_update_steps_per_epoch" to be un-precision. But it donesn't matter.
+    '''
+    train_data_partitions = [os.path.join(args.train_data_dir,f) for f in os.listdir(args.train_data_dir) if f[-4:] != '.crc']
+    
     num_train_batch =sum(
         np.ceil(float(open(os.path.join(args.train_data_dir,f)).read().strip())/args.per_device_train_batch_size/args.data_parallel_size)
         for f in os.listdir(args.train_data_dir) if f[-4:] == '.crc') 
     num_update_steps_per_epoch = np.ceil(
-        num_train_batch / args.gradient_accumulation_steps )
+        num_train_batch / args.gradient_accumulation_steps ) + len(train_data_partitions) -1
     lr_scheduler = get_scheduler(
         name=args.lr_scheduler_type,
         optimizer=optimizer,
@@ -191,18 +198,10 @@ def main():
         lr_scheduler=lr_scheduler,
         )
 
-    '''
-    How many folders, how many partitions. 
-    If you want to load the data into memory at one time, moving all the parquet files to same folder. 
-    That may cause "num_update_steps_per_epoch" to be un-precision. But it donesn't matter.
-    '''
-    train_data_partitions = [os.path.join(args.train_data_dir,f) for f in os.listdir(args.train_data_dir) if f[-4:] != '.crc']
-    train_data_partitions.sort()
-    
     if args.eval_data_dir:
         eval_data_partitions = [os.path.join(args.eval_data_dir,f) for f in os.listdir(args.eval_data_dir) if f[-4:] != '.crc']
         
-    skip_steps = 10
+    skip_steps = 0
     if args.steps_per_checkpoint == -1:
         args.steps_per_checkpoint = num_update_steps_per_epoch + skip_steps
         

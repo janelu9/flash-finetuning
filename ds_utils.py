@@ -69,7 +69,7 @@ def get_train_ds_config(offload,
         "zero_optimization": zero_opt_dict,
         "activation_checkpointing" :activation_checkpointing,
         "fp16": {"enabled": True,"loss_scale_window": 1000},
-        # "bf16": {"enabled": True},
+        #"bf16": {"enabled": True},
 
         "gradient_clipping": 1.0,
         "prescale_gradients": False,
@@ -113,11 +113,12 @@ def print_rank_0(msg, rank=0):
     if rank <= 0:
         print(msg)
 
-def shuffle_rank_0(train_data_partitions,rank=0,seed=1234):
+def shuffle_rank_0(train_data_partitions, rank = 0, seed = 1234):
     if rank == 0: 
         files = sum([[(d,f) for f in os.listdir(d) if f[-8:] == '.parquet'] for d in train_data_partitions],[])
         num_partitions = len(train_data_partitions)
         if num_partitions > 1:
+            files.sort()
             np.random.seed(seed)
             np.random.shuffle(files)
             for i,(d,f) in enumerate(files):

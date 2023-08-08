@@ -131,17 +131,16 @@ def main():
                               lr=args.learning_rate,
                               betas=(0.9, 0.95))
                               
-    data_dir = args.data_dir
-    data_files = [os.path.join(data_dir,f) for f in os.listdir(data_dir) if f[-4:] != '.crc']
-    data_files.sort()
+
+    train_data_partitions = [os.path.join(args.data_dir,f) for f in os.listdir(args.data_dir) if f[-4:] != '.crc']
     
     num_train_batch =sum(
-        np.ceil(float(open(os.path.join(data_dir,f)).read().strip())
+        np.ceil(float(open(os.path.join(args.data_dir,f)).read().strip())
                 /args.per_device_train_batch_size
                 /args.world_size)
-        for f in os.listdir(data_dir) if f[-4:] == '.crc')    
+        for f in os.listdir(args.data_dir) if f[-4:] == '.crc')    
     num_update_steps_per_epoch = np.ceil(
-        num_train_batch / args.gradient_accumulation_steps )
+        num_train_batch / args.gradient_accumulation_steps ) + len(train_data_partitions) - 1
     lr_scheduler = get_scheduler(
         name=args.lr_scheduler_type,
         optimizer=optimizer,
@@ -190,8 +189,8 @@ def main():
     
     for epoch in range(args.num_train_epochs):
         accumulation_train_batches = 0
-        shuffle_rank_0(data_files,args.global_rank,epoch)
-        for data_file in data_files:
+        shuffle_rank_0(train_data_partitions,args.global_rank,epoch)
+        for data_file in train_data_partitions:
             try:
                 data = pyarrow.parquet.read_table(data_file)
                 train_dataset = PromptDataset(
