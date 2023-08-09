@@ -180,14 +180,14 @@ if __name__=='__main__':
     file_name = os.path.splitext(file)[0]
     if os.path.isfile(source):
         tmp = os.path.join(source_dir,args.tmp)
-        if os.path.exists(tmp):
+        if not os.path.exists(tmp) or args.C:
             os.system(f" rm -rf {tmp}") 
-        os.makedirs(tmp)
-        os.system(f"cd {tmp};split -d -{args.n} ../{file} {file_name}-part-;cd -;")
+            os.makedirs(tmp)
+            os.system(f"cd {tmp};split -d -{args.n} ../{file} {file_name}-part-;cd -;")
     else:
         tmp = source
     compression = args.c.lower()
-    output_dir = args.o if args.o !="" else os.path.join(source_dir,file_name+f"_parquet")
+    output_dir = args.o if args.o !="" else os.path.join(source_dir,file_name+f"_{os.path.basename(args.tokenizer)}")
     if os.path.exists(output_dir):
         if args.C:
             os.system(f" rm -rf {output_dir}/*")
@@ -212,7 +212,7 @@ if __name__=='__main__':
     1929年还是1989年?   1929 or 1989?
     巴黎-随着经济危机不断加深和蔓延，整个世界一直在寻找历史上的类似事件希望有助于我们了解目前正在发生的情况。   PARIS – As the economic crisis deepens and widens, the world has been searching for historical analogies to help us understand what has been happening.
     # python convert_raws_to_ids.py -i news-commentary-v13-zh-en.txt -n 30000
-    Namespace(t='qa', i='news-commentary-v13-zh-en.txt', o='', n=30000, c='gzip', batch_size=32768, cores=-1, format='parquet', tokenizer='ziqingyang/chinese-alpaca-plus-lora-13b', tmp='tmp', T=False, C=False)
+    Namespace(t='qa', i='news-commentary-v13-zh-en.txt', o='', n=30000, c='gzip', batch_size=32768, cores=-1, format='parquet', tokenizer='openlm-research/open_llama_13b', tmp='tmp', T=False, C=False)
     /mnt/e/NLP
     ########## begine converting qa data with 12 executors.###########
     12777it [00:06, 2018.59it/s]
