@@ -177,7 +177,7 @@ def main():
     If you want to load the data into memory at one time, moving all the parquet files to same folder. 
     That may cause "num_update_steps_per_epoch" to be un-precision. But it donesn't matter.
     '''
-    train_data_partitions = [os.path.join(args.train_data_dir,f) for f in os.listdir(args.train_data_dir) if f[-4:] != '.crc']
+    train_data_partitions = [os.path.join(args.train_data_dir,f) for f in os.listdir(args.train_data_dir) if os.path.isdir(f)]
     
     num_train_batch =sum(
         np.ceil(float(open(os.path.join(args.train_data_dir,f)).read().strip())/args.per_device_train_batch_size/args.data_parallel_size)
@@ -199,7 +199,7 @@ def main():
         )
 
     if args.eval_data_dir:
-        eval_data_partitions = [os.path.join(args.eval_data_dir,f) for f in os.listdir(args.eval_data_dir) if f[-4:] != '.crc']
+        eval_data_partitions = [os.path.join(args.eval_data_dir,f) for f in os.listdir(args.eval_data_dir) if os.path.isdir(f)]
         
     skip_steps = 0
     if args.steps_per_checkpoint == -1:

@@ -132,7 +132,7 @@ def main():
                               betas=(0.9, 0.95))
                               
 
-    train_data_partitions = [os.path.join(args.data_dir,f) for f in os.listdir(args.data_dir) if f[-4:] != '.crc']
+    train_data_partitions = [os.path.join(args.data_dir,f) for f in os.listdir(args.data_dir) os.path.isdir(f)]
     
     num_train_batch =sum(
         np.ceil(float(open(os.path.join(args.data_dir,f)).read().strip())
