@@ -3,21 +3,19 @@
 # @date 2023/8/9
 set -e
 num=$2
-if [ "$num" == "" ]; then
-	num=$(($(du -shB1G $1|cut -f1)/1))
+if [ "$num" == "" ];then
+	num=`du -shB1G $1|cut -f1`
 fi
 cd $1
 cur_partitions=`ls`
 uuid=`head -1 /dev/urandom|md5sum|head -c18`
-for ((i=0;i<$num;i++))
-do
+for ((i=0;i<$num;i++));do
 	file=`printf "$uuid-part-%05d" $i`
 	rm -rf $file
 	mkdir $file
 done
 i=0
-for f in `find -name *.parquet|sort`
-do
+for f in `find -name *.parquet|sort`;do
 	mv $f `printf "$uuid-part-%05d/" $((i%$num))`
 	i=$((i+1))
 done
