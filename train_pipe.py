@@ -101,10 +101,10 @@ args.gradient_accumulation_steps = 2
 args.seed=1234
 args.weight_decay=0.01
 args.lr_scheduler_type="cosine"
-args.num_warmup_steps=0
+args.num_warmup_steps=100
 args.learning_rate=3e-4
 args.output_dir = "./output"
-args.pipe_parallel_size = 8
+args.pipe_parallel_size = 1
 args.model_parallel_size = 1
 args.gradient_checkpointing = True
 args.fast = True
@@ -203,13 +203,13 @@ def main():
         
     skip_steps = 0
     if args.steps_per_checkpoint == -1:
-        args.steps_per_checkpoint = num_update_steps_per_epoch + skip_steps
+        steps_per_checkpoint = num_update_steps_per_epoch + skip_steps
         
     checkpoint_memory=[]
     for epoch in range(args.num_train_epochs):
         accumulation_train_batches = 0
         shuffle_rank_0(train_data_partitions,args.global_rank,epoch)
-        for train_data_partition in train_data_partitions:
+        for data_id, train_data_partition in enumerate(train_data_partitions):
             try:
                 train_data = pyarrow.parquet.read_table(train_data_partition)
                 train_dataset = PromptDataset(
@@ -218,7 +218,7 @@ def main():
             except:
                 continue
             print_rank_0(
-                f"Beginning of Epoch {epoch+1}/{args.num_train_epochs}, Data file: {train_data_partition}.",
+                f"Beginning of Epoch {epoch+1}/{args.num_train_epochs}, Partition: {data_id+1}/{len(train_data_partitions)}, Partition Name: {train_data_partition}",
                 args.global_rank)
             train_dataloader = DataLoader(
                 train_dataset,
@@ -236,6 +236,7 @@ def main():
             train_loader = RepeatingLoader(train_dataloader)
             train_iter = iter(train_loader)
             cur_train_bacth_steps = int(np.ceil(cur_num_train_bacth/args.gradient_accumulation_steps)) + skip_steps #few steps may be skipped
+            if args.steps_per_checkpoint == -2: steps_per_checkpoint = cur_train_bacth_steps
             for step in range(cur_train_bacth_steps):
                 loss = engine.train_batch(data_iter=train_iter)
                 steps = engine.global_steps
@@ -268,7 +269,7 @@ def main():
                         gc.collect()
                     print_rank_0(f"************************ eval loss: {eval_loss/num_samples}************************ ",args.global_rank)
                     engine.train()
-                if args.checkpoint_dir and steps % args.steps_per_checkpoint == 0:
+                if args.checkpoint_dir and steps % steps_per_checkpoint == 0:
                     if args.max_num_checkpoints > 0 and args.max_num_checkpoints == len(checkpoint_memory):
                         oldest = checkpoint_memory.pop(0)
                         os.system(f"rm -rf {os.path.join(args.checkpoint_dir,str(oldest))}")
@@ -279,7 +280,7 @@ def main():
             del train_dataloader
             gc.collect()
             
-    if args.checkpoint_dir and args.steps_per_checkpoint != num_update_steps_per_epoch + skip_steps:
+    if args.checkpoint_dir and steps != ([0]+checkpoint_memory)[-1]:
         if args.max_num_checkpoints>0 and args.max_num_checkpoints == len(checkpoint_memory):
             oldest = checkpoint_memory.pop(0)
             os.system(f"rm -rf {os.path.join(args.checkpoint_dir,str(oldest))}")
