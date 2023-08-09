@@ -24,4 +24,4 @@ rm -rf $cur_partitions
 crc=`ls .*.crc`
 cat $crc|awk '{sum+=$1} END {print sum}'>.$uuid.crc
 rm -f $crc
-cat .$uuid.crc > total_number_of_samples.md
+echo -e "Data: $1\nPartitions: $2\nFiles: $i\nSamples: $(cat .$uuid.crc)\nUUID: $uuid"> data.info
