@@ -74,7 +74,7 @@ parser = deepspeed.add_config_arguments(parser)
 
 args=parser.parse_args()
 args.model_path = "openlm-research/open_llama_13b"
-args.data_dir = "news-commentary-v13-zh-en_parquet"
+args.train_data_dir = "news-commentary-v13-zh-en_parquet"
 args.zero_stage=3
 args.num_train_epochs=1
 args.per_device_train_batch_size = 1
@@ -132,13 +132,13 @@ def main():
                               betas=(0.9, 0.95))
                               
 
-    train_data_partitions = [os.path.join(args.data_dir,f) for f in os.listdir(args.data_dir) if os.path.isdir(f)]
+    train_data_partitions = [os.path.join(args.train_data_dir,f) for f in os.listdir(args.train_data_dir) if os.path.isdir(os.path.join(args.train_data_dir,f))]
     
     num_train_batch =sum(
-        np.ceil(float(open(os.path.join(args.data_dir,f)).read().strip())
+        np.ceil(float(open(os.path.join(args.train_data_dir,f)).read().strip())
                 /args.per_device_train_batch_size
                 /args.world_size)
-        for f in os.listdir(args.data_dir) if f[-4:] == '.crc')    
+        for f in os.listdir(args.train_data_dir) if f[-4:] == '.crc')    
     num_update_steps_per_epoch = np.ceil(
         num_train_batch / args.gradient_accumulation_steps ) + len(train_data_partitions) - 1
     lr_scheduler = get_scheduler(
