@@ -21,7 +21,7 @@ for f in `find -name *.parquet|sort`;do
 done
 rm -rf $cur_partitions 
 crc=`ls .*.crc`
-cat $crc|awk '{sum+=$1} END {print sum}'>.$uuid.crc
+cat $crc|awk '{sum+=$1;len=$2} END {print sum"\t"len}'>.$uuid.crc
 rm -f $crc
-echo -e "Data: $1\nPartitions: $num\nFiles: $i\nSamples: $(cat .$uuid.crc)\nUUID: $uuid\n\nSize\tPartition">data.info
+echo -e "Data: $1\nPartitions: $num\nFiles: $i\nSamples: $(cat .$uuid.crc|awk '{print $1"*"$2}')\nUUID: $uuid\n\nSize\tPartition">data.info
 du -sh *-part-* >>data.info

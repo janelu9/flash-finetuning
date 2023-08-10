@@ -152,7 +152,7 @@ def write_parquet(filename,output_dir,dtype,compression):
                                     out_file % (i//batch_size), 
                                     compression=compression)
     del data_batch                                
-    os.system(f" echo {i+1} > {check_file} ")
+    os.system(f"echo {i+1} {MAX_SEQ_LENGTH} > {check_file}")
     print(f"{filename} saved with {i+1} samples")
     gc.collect()
     

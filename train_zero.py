@@ -74,7 +74,7 @@ parser = deepspeed.add_config_arguments(parser)
 
 args=parser.parse_args()
 args.model_path = "openlm-research/open_llama_13b"
-args.train_data_dir = "news-commentary-v13-zh-en_parquet"
+args.train_data_dir = "news-commentary-v13-zh-en_open_llama_13b"
 args.zero_stage=3
 args.num_train_epochs=1
 args.per_device_train_batch_size = 1
@@ -135,7 +135,7 @@ def main():
     train_data_partitions = [os.path.join(args.train_data_dir,f) for f in os.listdir(args.train_data_dir) if os.path.isdir(os.path.join(args.train_data_dir,f))]
     
     num_train_batch =sum(
-        np.ceil(float(open(os.path.join(args.train_data_dir,f)).read().strip())
+        np.ceil(float(open(os.path.join(args.train_data_dir,f)).read().split()[0])
                 /args.per_device_train_batch_size
                 /args.world_size)
         for f in os.listdir(args.train_data_dir) if f[-4:] == '.crc')    
