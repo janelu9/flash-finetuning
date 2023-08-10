@@ -104,7 +104,7 @@ args.lr_scheduler_type="cosine"
 args.num_warmup_steps=100
 args.learning_rate=3e-4
 args.output_dir = "./output"
-args.pipe_parallel_size = 8
+args.pipe_parallel_size = 1
 args.model_parallel_size = 1
 args.gradient_checkpointing = True
 args.fast = True
@@ -263,9 +263,11 @@ def main():
                             loss = engine.eval_batch(data_iter = eval_iter)
                             num_samples += 1
                             eval_loss += loss
-                        del eval_data
-                        del eval_dataset
+                        del eval_iter
+                        del eval_loader
                         del eval_dataloader
+                        del eval_dataset
+                        del eval_data
                         gc.collect()
                     print_rank_0(f"************************ eval loss: {eval_loss/num_samples}************************ ",args.global_rank)
                     engine.train()
@@ -275,9 +277,11 @@ def main():
                         os.system(f"rm -rf {os.path.join(args.checkpoint_dir,str(oldest))}")
                     engine.save_checkpoint(args.checkpoint_dir,tag = steps)
                     checkpoint_memory.append(steps)
-            del train_data
-            del train_dataset
+            del train_iter
+            del train_loader
             del train_dataloader
+            del train_dataset
+            del train_data
             gc.collect()
             
     if args.checkpoint_dir and steps != ([0]+checkpoint_memory)[-1]:

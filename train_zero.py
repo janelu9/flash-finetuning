@@ -219,9 +219,11 @@ def main():
                     print_rank_0(f"loss: {loss.item()}", args.global_rank)
             # Evaluate perplexity on the validation set.
             # perplexity = evaluation(model, eval_dataloader)
-            del train_data
-            del train_dataset
+            del train_iter
+            del train_loader
             del train_dataloader
+            del train_dataset
+            del train_data
             gc.collect()
             # Evaluate perplexity on the validation set.
             print_rank_0(
