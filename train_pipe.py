@@ -35,6 +35,8 @@ from torch.utils.data import DataLoader
 from deepspeed.utils import RepeatingLoader
 from deepspeed.ops.adam import DeepSpeedCPUAdam, FusedAdam
 from deepspeed.runtime.pipe.topology import PipeModelDataParallelTopology
+from tqdm import tqdm
+import time
 import numpy as np
 import pyarrow.parquet
 import os
@@ -263,12 +265,14 @@ def main():
                             loss = engine.eval_batch(data_iter = eval_iter)
                             num_samples += 1
                             eval_loss += loss
+                        engine.set_dataiterator(None)
                         del eval_iter
                         del eval_loader
                         del eval_dataloader
                         del eval_dataset
                         del eval_data
                         gc.collect()
+                        time.sleep(10)
                     print_rank_0(f"************************ eval loss: {eval_loss/num_samples}************************ ",args.global_rank)
                     engine.train()
                 if args.checkpoint_dir and steps % steps_per_checkpoint == 0:
@@ -277,12 +281,15 @@ def main():
                         os.system(f"rm -rf {os.path.join(args.checkpoint_dir,str(oldest))}")
                     engine.save_checkpoint(args.checkpoint_dir,tag = steps)
                     checkpoint_memory.append(steps)
+            print_rank_0("Free the memory for a ten seconds ......",args.global_rank)
+            engine.set_dataiterator(None)
             del train_iter
             del train_loader
             del train_dataloader
             del train_dataset
             del train_data
             gc.collect()
+            [time.sleep(0.1) for _ in tqdm(range(100))]
             
     if args.checkpoint_dir and steps != ([0]+checkpoint_memory)[-1]:
         if args.max_num_checkpoints>0 and args.max_num_checkpoints == len(checkpoint_memory):
