@@ -265,14 +265,6 @@ def main():
                             loss = engine.eval_batch(data_iter = eval_iter)
                             num_samples += 1
                             eval_loss += loss
-                        engine.set_dataiterator(None)
-                        del eval_iter
-                        del eval_loader
-                        del eval_dataloader
-                        del eval_dataset
-                        del eval_data
-                        gc.collect()
-                        time.sleep(10)
                     print_rank_0(f"************************ eval loss: {eval_loss/num_samples}************************ ",args.global_rank)
                     engine.train()
                 if args.checkpoint_dir and steps % steps_per_checkpoint == 0:
