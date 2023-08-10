@@ -10,10 +10,10 @@ Convert the raw data to token ids stored in parquet format.
 python convert_raws_to_ids.py -i news-commentary-v13-zh-en.txt
 ```
 
-Do a repartition(optional but recommended).  The fewer partitions, the better shuffle, but the larger memory requirement during training. Setting `$num_partition` according to the memory of each worker and the stability of your cluster.
+Do a repartition(optional but recommended).  The fewer partitions, the better shuffle, but the larger memory requirement during training. Setting `num_partition` according to the memory of each worker and the stability of your cluster.
 
 ```shell
-parquet_data_dir=news-commentary-v13-zh-en_parquet
+parquet_data_dir=news-commentary-v13-zh-en_open_llama_13b
 num_partition=3
 ./repartition.sh $parquet_data_dir $num_partition
 ```
