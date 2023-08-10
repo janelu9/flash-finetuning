@@ -209,7 +209,7 @@ def main():
     for epoch in range(args.num_train_epochs):
         accumulation_train_batches = 0
         shuffle_rank_0(train_data_partitions,args.global_rank,epoch)
-        for data_id, train_data_partition in enumerate(train_data_partitions):
+        for partition_id, train_data_partition in enumerate(train_data_partitions):
             try:
                 train_data = pyarrow.parquet.read_table(train_data_partition)
                 train_dataset = PromptDataset(
@@ -218,7 +218,7 @@ def main():
             except:
                 continue
             print_rank_0(
-                f"Beginning of Epoch {epoch+1}/{args.num_train_epochs}, Partition: {data_id+1}/{len(train_data_partitions)}, Partition Name: {train_data_partition}",
+                f"Beginning of Epoch {epoch+1}/{args.num_train_epochs}, Partition: {partition_id+1}/{len(train_data_partitions)}, Partition Name: {train_data_partition}",
                 args.global_rank)
             train_dataloader = DataLoader(
                 train_dataset,
@@ -258,7 +258,7 @@ def main():
                             batch_size=args.per_device_train_batch_size)
                         eval_loader = RepeatingLoader(eval_dataloader)
                         eval_iter = iter(eval_loader)
-                        cur_eval_bacth_steps = int(np.ceil(len(eval_dataloader)/args.data_parallel_size/args.gradient_accumulation_steps)) +skip_steps
+                        cur_eval_bacth_steps = int(np.ceil(len(eval_dataloader)/args.data_parallel_size/args.gradient_accumulation_steps))
                         for eval_step in range(cur_eval_bacth_steps):
                             loss = engine.eval_batch(data_iter = eval_iter)
                             num_samples += 1
