@@ -215,7 +215,7 @@ def main():
             try:
                 st = time.time()
                 train_data = pyarrow.parquet.read_table(train_data_partition)
-                read_train_time = (time.time() -st)*2
+                read_train_time = (time.time() -st)*5
                 train_dataset = PromptDataset(
                     {k:train_data[k].to_numpy().tolist() 
                      for k in train_data.column_names})
@@ -252,7 +252,7 @@ def main():
                         try:
                             st = time.time()
                             eval_data = pyarrow.parquet.read_table(eval_data_partition)
-                            read_eval_time = (time.time() -st)*2
+                            read_eval_time = (time.time() -st)*5
                             eval_dataset = PromptDataset(
                                 {k:eval_data[k].to_numpy().tolist()
                                 for k in eval_data.column_names})
