@@ -272,7 +272,7 @@ def main():
                             loss = engine.eval_batch(data_iter = eval_iter)
                             num_samples += 1
                             eval_loss += loss
-                        print_rank_0(f"Free memory of eval data for {read_eval_time} seconds ......",args.global_rank)
+                        print_rank_0(f"Wash the memory of train data clean for {read_eval_time} seconds ......",args.global_rank)
                         engine.set_dataiterator(None)
                         del eval_iter
                         del eval_loader
@@ -289,7 +289,7 @@ def main():
                         os.system(f"rm -rf {os.path.join(args.checkpoint_dir,str(oldest))}")
                     engine.save_checkpoint(args.checkpoint_dir,tag = steps)
                     checkpoint_memory.append(steps)
-            print_rank_0(f"Free memory of train data for {read_train_time} seconds ......",args.global_rank)
+            print_rank_0(f"Wash the memory of train data clean for {read_train_time} seconds ......",args.global_rank)
             engine.set_dataiterator(None)
             del train_iter
             del train_loader
