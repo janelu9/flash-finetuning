@@ -185,12 +185,13 @@ def main():
         np.ceil(float(open(os.path.join(args.train_data_dir,f)).read().split()[0])/args.per_device_train_batch_size/args.data_parallel_size)
         for f in os.listdir(args.train_data_dir) if f[-4:] == '.crc') + len(train_data_partitions) -1
     num_update_steps_per_epoch = np.ceil(
-        num_train_batch / args.gradient_accumulation_steps ) 
+        num_train_batch / args.gradient_accumulation_steps )
+    num_training_steps = args.num_train_epochs * num_update_steps_per_epoch
     lr_scheduler = get_scheduler(
         name=args.lr_scheduler_type,
         optimizer=optimizer,
         num_warmup_steps=args.num_warmup_steps if args.num_warmup_steps >= 1 else int(args.num_warmup_steps * num_update_steps_per_epoch),
-        num_training_steps=args.num_train_epochs * num_update_steps_per_epoch,)      
+        num_training_steps=num_training_steps)      
     
     engine, *_ = deepspeed.initialize(
         args=args,
@@ -203,14 +204,14 @@ def main():
     if args.eval_data_dir:
         eval_data_partitions = [os.path.join(args.eval_data_dir,f) for f in os.listdir(args.eval_data_dir) if os.path.isdir(os.path.join(args.eval_data_dir,f))]
         
-    skip_steps = 0
     if args.steps_per_checkpoint == -1:
-        steps_per_checkpoint = num_update_steps_per_epoch + skip_steps
+        steps_per_checkpoint = num_update_steps_per_epoch 
     
-    time_scale = 5.
+    time_scale = 3.
     checkpoint_memory=[]
+    print_rank_0(args, args.global_rank)
     for epoch in range(args.num_train_epochs):
-        accumulation_train_batches = 0
+        accumulation_train_steps = 0
         shuffle_rank_0(train_data_partitions,args.global_rank,epoch)
         for partition_id, train_data_partition in enumerate(train_data_partitions):
             engine.train()
@@ -224,7 +225,7 @@ def main():
             except:
                 continue
             print_rank_0(
-                f"Beginning of Epoch {epoch+1}/{args.num_train_epochs}, Partition: {partition_id+1}/{len(train_data_partitions)}, Partition Name: {train_data_partition}",
+                f"Beginning of Epoch {epoch+1}/{args.num_train_epochs}, Partition Rank: {partition_id+1}/{len(train_data_partitions)}, Partition Name: {train_data_partition}",
                 args.global_rank)
             train_dataloader = DataLoader(
                 train_dataset,
@@ -233,17 +234,16 @@ def main():
                 shuffle=True,
                 drop_last=False,
                 batch_size=args.per_device_train_batch_size)
-            cur_num_train_bacth =int(np.ceil(len(train_dataloader)/args.data_parallel_size))
-            accumulation_train_batches += cur_num_train_bacth
-            print_rank_0(
-                f" Total Micro Batches: {accumulation_train_batches}/{int(num_train_batch)}.",
-                args.global_rank)
-            print_rank_0(args, args.global_rank)
             train_loader = RepeatingLoader(train_dataloader)
             train_iter = iter(train_loader)
-            cur_train_bacth_steps = int(np.ceil(cur_num_train_bacth/args.gradient_accumulation_steps)) + skip_steps #few steps may be skipped
+            cur_num_train_bacth =int(np.ceil(len(train_dataloader)/args.data_parallel_size))
+            cur_train_bacth_steps = int(np.ceil(cur_num_train_bacth/args.gradient_accumulation_steps))
+            accumulation_train_steps += cur_train_bacth_steps
+            print_rank_0(
+                f" Total Micro Batches: {accumulation_train_steps}/{int(num_training_steps)}.",
+                args.global_rank)
             if args.steps_per_checkpoint == -2: steps_per_checkpoint = cur_train_bacth_steps
-            for step in range(cur_train_bacth_steps):
+            for step in range(10):
                 loss = engine.train_batch(data_iter=train_iter)
                 steps = engine.global_steps
                 if args.eval_data_dir and steps % args.steps_per_eval == 0:
