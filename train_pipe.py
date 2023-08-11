@@ -207,7 +207,7 @@ def main():
     if args.steps_per_checkpoint == -1:
         steps_per_checkpoint = num_update_steps_per_epoch 
     
-    time_scale = 3.
+    time_scale = 1.
     checkpoint_memory=[]
     print_rank_0(args, args.global_rank)
     for epoch in range(args.num_train_epochs):
@@ -218,7 +218,7 @@ def main():
             try:
                 st = time.time()
                 train_data = pyarrow.parquet.read_table(train_data_partition)
-                read_train_time = (time.time() -st)*time_scale
+                read_train_time = min(15,(time.time() -st)*time_scale)
                 train_dataset = PromptDataset(
                     {k:train_data[k].to_numpy().tolist() 
                      for k in train_data.column_names})
@@ -243,7 +243,7 @@ def main():
                 f" Total Micro Batches: {accumulation_train_steps}/{int(num_training_steps)}.",
                 args.global_rank)
             if args.steps_per_checkpoint == -2: steps_per_checkpoint = cur_train_bacth_steps
-            for step in range(10):
+            for step in range(cur_train_bacth_steps):
                 loss = engine.train_batch(data_iter=train_iter)
                 steps = engine.global_steps
                 if args.eval_data_dir and steps % args.steps_per_eval == 0:
@@ -254,7 +254,7 @@ def main():
                         try:
                             st = time.time()
                             eval_data = pyarrow.parquet.read_table(eval_data_partition)
-                            read_eval_time = (time.time() -st)*time_scale
+                            read_eval_time = min(15,(time.time() -st)*time_scale)
                             eval_dataset = PromptDataset(
                                 {k:eval_data[k].to_numpy().tolist()
                                 for k in eval_data.column_names})
