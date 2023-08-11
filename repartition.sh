@@ -15,7 +15,7 @@ for ((i=0;i<$num;i++));do
 	mkdir $file
 done
 i=0
-for f in `find -name *.parquet|sort`;do
+for f in `find -name *.parquet`;do
 	mv $f `printf "$uuid-part-%05d/" $((i%$num))`
 	i=$((i+1))
 done
