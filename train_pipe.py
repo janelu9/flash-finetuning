@@ -309,7 +309,7 @@ def main():
     if args.output_dir:
         if not os.path.exists(args.output_dir) and args.global_rank == 0:
             os.makedirs(args.output_dir)
-        convert_lora_to_linear_layer(engine.module).half().save_pretrained(args.output_dir)
+        convert_lora_to_linear_layer(engine.module).save_pretrained(args.output_dir)
 
 if __name__ == "__main__":
     main()
