@@ -183,9 +183,9 @@ def main():
     
     num_train_batch =sum(
         np.ceil(float(open(os.path.join(args.train_data_dir,f)).read().split()[0])/args.per_device_train_batch_size/args.data_parallel_size)
-        for f in os.listdir(args.train_data_dir) if f[-4:] == '.crc') 
+        for f in os.listdir(args.train_data_dir) if f[-4:] == '.crc') + len(train_data_partitions) -1
     num_update_steps_per_epoch = np.ceil(
-        num_train_batch / args.gradient_accumulation_steps ) + len(train_data_partitions) -1
+        num_train_batch / args.gradient_accumulation_steps ) 
     lr_scheduler = get_scheduler(
         name=args.lr_scheduler_type,
         optimizer=optimizer,
