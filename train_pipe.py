@@ -239,7 +239,7 @@ def main():
             cur_train_bacth_steps = int(np.ceil(cur_num_train_bacth/args.gradient_accumulation_steps))
             accumulation_train_steps += cur_train_bacth_steps
             print_rank_0(
-                f" Total Micro Batches: {accumulation_train_steps}/{int(num_training_steps)}.",
+                f" Total Micro Steps: {accumulation_train_steps}/{int(num_training_steps)}.",
                 args.global_rank)
             if args.steps_per_checkpoint == -2: steps_per_checkpoint = cur_train_bacth_steps
             for step in range(cur_train_bacth_steps):
