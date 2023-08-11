@@ -206,16 +206,18 @@ def main():
     skip_steps = 0
     if args.steps_per_checkpoint == -1:
         steps_per_checkpoint = num_update_steps_per_epoch + skip_steps
-        
+    
+    time_scale = 5.
     checkpoint_memory=[]
     for epoch in range(args.num_train_epochs):
         accumulation_train_batches = 0
         shuffle_rank_0(train_data_partitions,args.global_rank,epoch)
         for partition_id, train_data_partition in enumerate(train_data_partitions):
+            engine.train()
             try:
                 st = time.time()
                 train_data = pyarrow.parquet.read_table(train_data_partition)
-                read_train_time = (time.time() -st)*5
+                read_train_time = (time.time() -st)*time_scale
                 train_dataset = PromptDataset(
                     {k:train_data[k].to_numpy().tolist() 
                      for k in train_data.column_names})
@@ -252,7 +254,7 @@ def main():
                         try:
                             st = time.time()
                             eval_data = pyarrow.parquet.read_table(eval_data_partition)
-                            read_eval_time = (time.time() -st)*5
+                            read_eval_time = (time.time() -st)*time_scale
                             eval_dataset = PromptDataset(
                                 {k:eval_data[k].to_numpy().tolist()
                                 for k in eval_data.column_names})
