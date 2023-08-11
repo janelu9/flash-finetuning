@@ -214,7 +214,6 @@ def main():
         accumulation_train_steps = 0
         shuffle_rank_0(train_data_partitions,args.global_rank,epoch)
         for partition_id, train_data_partition in enumerate(train_data_partitions):
-            engine.train()
             try:
                 st = time.time()
                 train_data = pyarrow.parquet.read_table(train_data_partition)
