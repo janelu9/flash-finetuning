@@ -213,7 +213,9 @@ def main():
         shuffle_rank_0(train_data_partitions,args.global_rank,epoch)
         for partition_id, train_data_partition in enumerate(train_data_partitions):
             try:
+                st = time.time()
                 train_data = pyarrow.parquet.read_table(train_data_partition)
+                read_train_time = (time.time() -st)*2
                 train_dataset = PromptDataset(
                     {k:train_data[k].to_numpy().tolist() 
                      for k in train_data.column_names})
@@ -239,7 +241,7 @@ def main():
             train_iter = iter(train_loader)
             cur_train_bacth_steps = int(np.ceil(cur_num_train_bacth/args.gradient_accumulation_steps)) + skip_steps #few steps may be skipped
             if args.steps_per_checkpoint == -2: steps_per_checkpoint = cur_train_bacth_steps
-            for step in range(cur_train_bacth_steps):
+            for step in range(100):
                 loss = engine.train_batch(data_iter=train_iter)
                 steps = engine.global_steps
                 if args.eval_data_dir and steps % args.steps_per_eval == 0:
@@ -247,10 +249,15 @@ def main():
                     eval_loss = 0
                     num_samples = 0
                     for eval_data_partition in eval_data_partitions:
-                        eval_data = pyarrow.parquet.read_table(eval_data_partition)
-                        eval_dataset = PromptDataset(
-                            {k:eval_data[k].to_numpy().tolist()
-                             for k in eval_data.column_names})
+                        try:
+                            st = time.time()
+                            eval_data = pyarrow.parquet.read_table(eval_data_partition)
+                            read_eval_time = (time.time() -st)*2
+                            eval_dataset = PromptDataset(
+                                {k:eval_data[k].to_numpy().tolist()
+                                for k in eval_data.column_names})
+                        except:
+                            continue
                         eval_dataloader = DataLoader(
                             eval_dataset,
                             collate_fn=PromptDataCollatorPipe(),
@@ -265,6 +272,15 @@ def main():
                             loss = engine.eval_batch(data_iter = eval_iter)
                             num_samples += 1
                             eval_loss += loss
+                        print_rank_0(f"Free memory of eval data for {read_eval_time} seconds ......",args.global_rank)
+                        engine.set_dataiterator(None)
+                        del eval_iter
+                        del eval_loader
+                        del eval_dataloader
+                        del eval_dataset
+                        del eval_data
+                        gc.collect()
+                        [time.sleep(read_eval_time/100) for _ in tqdm(range(100))]
                     print_rank_0(f"************************ eval loss: {eval_loss/num_samples}************************ ",args.global_rank)
                     engine.train()
                 if args.checkpoint_dir and steps % steps_per_checkpoint == 0:
@@ -273,7 +289,7 @@ def main():
                         os.system(f"rm -rf {os.path.join(args.checkpoint_dir,str(oldest))}")
                     engine.save_checkpoint(args.checkpoint_dir,tag = steps)
                     checkpoint_memory.append(steps)
-            print_rank_0("Free the memory for a ten seconds ......",args.global_rank)
+            print_rank_0(f"Free memory of train data for {read_train_time} seconds ......",args.global_rank)
             engine.set_dataiterator(None)
             del train_iter
             del train_loader
@@ -281,7 +297,7 @@ def main():
             del train_dataset
             del train_data
             gc.collect()
-            [time.sleep(0.1) for _ in tqdm(range(100))]
+            [time.sleep(read_train_time/100) for _ in tqdm(range(100))]
             
     if args.checkpoint_dir and steps != ([0]+checkpoint_memory)[-1]:
         if args.max_num_checkpoints>0 and args.max_num_checkpoints == len(checkpoint_memory):
