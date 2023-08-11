@@ -241,7 +241,7 @@ def main():
             train_iter = iter(train_loader)
             cur_train_bacth_steps = int(np.ceil(cur_num_train_bacth/args.gradient_accumulation_steps)) + skip_steps #few steps may be skipped
             if args.steps_per_checkpoint == -2: steps_per_checkpoint = cur_train_bacth_steps
-            for step in range(100):
+            for step in range(cur_train_bacth_steps):
                 loss = engine.train_batch(data_iter=train_iter)
                 steps = engine.global_steps
                 if args.eval_data_dir and steps % args.steps_per_eval == 0:
