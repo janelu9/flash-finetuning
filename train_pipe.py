@@ -62,7 +62,7 @@ parser.add_argument('--steps_per_eval',
                     type=int,
                     default=100,
                     help='steps per eval')
-parser.add_argument('--steps_per_checkpoint',
+parser.add_argument('--args.steps_per_checkpoint',
                     type=int,
                     default=-1,
                     help='steps per checkpoint')
@@ -93,10 +93,14 @@ parser.add_argument('--only_optimize_lora',
 parser = deepspeed.add_config_arguments(parser)
 
 args=parser.parse_args()
-args.model_path = "openlm-research/open_llama_13b"
-args.train_data_dir = "news-commentary-v13-zh-en_open_llama_13b"
+args.model_path = "Baichuan_13B_Chat/micro"
+args.train_data_dir = "news-commentary-v13-zh-en_Baichuan_13B_Chat"
 args.eval_data_dir = ""
-args.zero_stage=1
+args.checkpoint_dir = "check"
+args.resume_dir = "check"
+args.load_module_only = False # It should be 'True' if hyper-parameters are modified, such as batch_size, world_size, train_data etc.
+args.steps_per_checkpoint = -1
+args.zero_stage=0
 args.num_train_epochs=1
 args.per_device_train_batch_size = 2
 args.gradient_accumulation_steps = 2
@@ -141,13 +145,13 @@ def main():
         os.system(f"mkdir -p {args.checkpoint_dir}")
     torch.distributed.barrier()
 
-    config=LlamaConfig.from_pretrained(args.model_path)
+    config=BaichuanConfig.from_pretrained(args.model_path)
     topo = PipeModelDataParallelTopology(
         num_pp = args.pipe_parallel_size,
         num_mp = args.model_parallel_size,
         num_dp = args.data_parallel_size)
     args.seed = args.seed + topo.get_coord(args.global_rank).pipe
-    model = LlamaForCausalLMPipe(
+    model = BaichuanForCausalLMPipe(
         config,
         args.gradient_checkpointing,
         args.fast,
@@ -203,21 +207,34 @@ def main():
 
     if args.eval_data_dir:
         eval_data_partitions = [os.path.join(args.eval_data_dir,f) for f in os.listdir(args.eval_data_dir) if os.path.isdir(os.path.join(args.eval_data_dir,f))]
-        
-    if args.steps_per_checkpoint == -1:
-        steps_per_checkpoint = num_update_steps_per_epoch 
     
+
     time_scale = 1.
     checkpoint_memory=[]
+    skiped_epoch = 0
+    skiped_partition_id = 0
+    skiped_step = -1
+    if args.resume_dir:
+        ckpt_file,ckpt_config=engine.load_checkpoint(args.resume_dir,load_module_only=args.load_module_only)
+        skiped_epoch = ckpt_config["ds_config"]["epoch"]
+        skiped_partition_id = ckpt_config["ds_config"]["partition_id"]
+        if not args.load_module_only:
+            assert ds_config['train_batch_size'] == ckpt_config["ds_config"]["train_batch_size"]
+            skiped_step = ckpt_config["ds_config"]["step"]
+            engine.global_steps = int(ckpt_file.rsplit("/",2)[1])
+            checkpoint_memory.append(engine.global_steps)
+        
+    accumulation_train_steps = engine.global_steps
     print_rank_0(args, args.global_rank)
     for epoch in range(args.num_train_epochs):
-        accumulation_train_steps = 0
+        if epoch < skiped_epoch:continue
         shuffle_rank_0(train_data_partitions,args.global_rank,epoch)
         for partition_id, train_data_partition in enumerate(train_data_partitions):
+            if epoch == skiped_epoch and partition_id < skiped_partition_id:continue
             try:
                 st = time.time()
                 train_data = pyarrow.parquet.read_table(train_data_partition)
-                read_train_time = min(15,(time.time() -st)*time_scale)
+                read_train_time = min(10,(time.time() -st)*time_scale)
                 train_dataset = PromptDataset(
                     {k:train_data[k].to_numpy().tolist() 
                      for k in train_data.column_names})
@@ -235,14 +252,20 @@ def main():
                 batch_size=args.per_device_train_batch_size)
             train_loader = RepeatingLoader(train_dataloader)
             train_iter = iter(train_loader)
-            cur_num_train_bacth =int(np.ceil(len(train_dataloader)/args.data_parallel_size))
+            cur_num_train_bacth = int(np.ceil(len(train_dataloader)/args.data_parallel_size))
+            start_step = 0 
             cur_train_bacth_steps = int(np.ceil(cur_num_train_bacth/args.gradient_accumulation_steps))
-            accumulation_train_steps += cur_train_bacth_steps
+            if epoch == skiped_epoch and partition_id == skiped_partition_id :
+                if skiped_step == cur_train_bacth_steps -1:
+                    continue
+                start_step = skiped_step + 1
+                for _ in range(start_step):
+                    next(train_iter)
+            accumulation_train_steps += cur_train_bacth_steps - start_step
             print_rank_0(
-                f" Total Micro Steps: {accumulation_train_steps}/{int(num_training_steps)}.",
+                f" Total Partition Steps: {accumulation_train_steps}/{int(num_training_steps)}.",
                 args.global_rank)
-            if args.steps_per_checkpoint == -2: steps_per_checkpoint = cur_train_bacth_steps
-            for step in range(cur_train_bacth_steps):
+            for step in range(start_step,cur_train_bacth_steps):
                 loss = engine.train_batch(data_iter=train_iter)
                 steps = engine.global_steps
                 if args.eval_data_dir and steps % args.steps_per_eval == 0:
@@ -253,7 +276,7 @@ def main():
                         try:
                             st = time.time()
                             eval_data = pyarrow.parquet.read_table(eval_data_partition)
-                            read_eval_time = min(15,(time.time() -st)*time_scale)
+                            read_eval_time = min(10,(time.time() -st)*time_scale)
                             eval_dataset = PromptDataset(
                                 {k:eval_data[k].to_numpy().tolist()
                                 for k in eval_data.column_names})
@@ -284,10 +307,13 @@ def main():
                         [time.sleep(read_eval_time/100) for _ in tqdm(range(100))]
                     print_rank_0(f"************************ eval loss: {eval_loss/num_samples}************************ ",args.global_rank)
                     engine.train()
-                if args.checkpoint_dir and steps % steps_per_checkpoint == 0:
+                if args.checkpoint_dir and ((args.steps_per_checkpoint>0 and steps % args.steps_per_checkpoint == 0) or steps == accumulation_train_steps):
                     if args.max_num_checkpoints > 0 and args.max_num_checkpoints == len(checkpoint_memory):
                         oldest = checkpoint_memory.pop(0)
                         os.system(f"rm -rf {os.path.join(args.checkpoint_dir,str(oldest))}")
+                    engine.config["epoch"] = epoch
+                    engine.config["partition_id"] = partition_id
+                    engine.config["step"] = step
                     engine.save_checkpoint(args.checkpoint_dir,tag = steps)
                     checkpoint_memory.append(steps)
             print_rank_0(f"Wash the memory of train data clean for {read_train_time} seconds ......",args.global_rank)
@@ -300,11 +326,14 @@ def main():
             gc.collect()
             [time.sleep(read_train_time/100) for _ in tqdm(range(100))]
             
-    if args.checkpoint_dir and steps != ([0]+checkpoint_memory)[-1]:
+    if args.checkpoint_dir and accumulation_train_steps != ([0]+checkpoint_memory)[-1]:
         if args.max_num_checkpoints>0 and args.max_num_checkpoints == len(checkpoint_memory):
             oldest = checkpoint_memory.pop(0)
             os.system(f"rm -rf {os.path.join(args.checkpoint_dir,str(oldest))}")
-        engine.save_checkpoint(args.checkpoint_dir,tag = steps)
+        engine.config["epoch"] = epoch
+        engine.config["partition_id"] = partition_id
+        engine.config["step"] = step
+        engine.save_checkpoint(args.checkpoint_dir,tag = accumulation_train_steps)
         
     if args.output_dir:
         if not os.path.exists(args.output_dir) and args.global_rank == 0:
