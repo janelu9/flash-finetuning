@@ -93,11 +93,11 @@ parser.add_argument('--only_optimize_lora',
 parser = deepspeed.add_config_arguments(parser)
 
 args=parser.parse_args()
-args.model_path = "Baichuan_13B_Chat/micro"
+args.model_path = "Baichuan_13B_Chat"
 args.train_data_dir = "news-commentary-v13-zh-en_Baichuan_13B_Chat"
 args.eval_data_dir = ""
 args.checkpoint_dir = "check"
-args.resume_dir = "check"
+args.resume_dir = ""
 args.load_module_only = False # It should be 'True' if hyper-parameters are modified, such as batch_size, world_size, train_data etc.
 args.steps_per_checkpoint = -1
 args.zero_stage=0
