@@ -97,7 +97,7 @@ args.model_path = "Baichuan_13B_Chat"
 args.train_data_dir = "news-commentary-v13-zh-en_Baichuan_13B_Chat"
 args.eval_data_dir = ""
 args.checkpoint_dir = "check"
-args.resume_dir = ""
+args.resume_dir = "check"
 args.load_module_only = False # It should be 'True' if hyper-parameters are modified, such as batch_size, world_size, train_data etc.
 args.steps_per_checkpoint = -1
 args.zero_stage=0
@@ -190,7 +190,7 @@ def main():
         for f in os.listdir(args.train_data_dir) if f[-4:] == '.crc') 
     num_update_steps_per_epoch = np.ceil(
         num_train_batch / args.gradient_accumulation_steps ) + len(train_data_partitions)
-    num_training_steps = args.num_train_epochs * num_update_steps_per_epoch
+    num_training_steps = int(args.num_train_epochs * num_update_steps_per_epoch)
     lr_scheduler = get_scheduler(
         name=args.lr_scheduler_type,
         optimizer=optimizer,
@@ -217,7 +217,7 @@ def main():
     if args.resume_dir:
         ckpt_file,ckpt_config=engine.load_checkpoint(args.resume_dir,load_module_only=args.load_module_only)
         skiped_epoch = ckpt_config["ds_config"]["epoch"]
-        skiped_partition_id = ckpt_config["ds_config"]["partition_id"]
+        skiped_partition_id = ckpt_config["ds_config"]["partition_id"] # plus 1 if you want to skip this data partition
         if not args.load_module_only:
             assert ds_config['train_batch_size'] == ckpt_config["ds_config"]["train_batch_size"]
             skiped_step = ckpt_config["ds_config"]["step"]
@@ -263,7 +263,7 @@ def main():
                     next(train_iter)
             accumulation_train_steps += cur_train_bacth_steps - start_step
             print_rank_0(
-                f" Total Partition Steps: {accumulation_train_steps}/{int(num_training_steps)}.",
+                f" Total Partition Steps: {accumulation_train_steps}/{num_training_steps}.",
                 args.global_rank)
             for step in range(start_step,cur_train_bacth_steps):
                 loss = engine.train_batch(data_iter=train_iter)
