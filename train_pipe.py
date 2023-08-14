@@ -62,7 +62,7 @@ parser.add_argument('--steps_per_eval',
                     type=int,
                     default=100,
                     help='steps per eval')
-parser.add_argument('--args.steps_per_checkpoint',
+parser.add_argument('--steps_per_checkpoint',
                     type=int,
                     default=-1,
                     help='steps per checkpoint')
