@@ -97,8 +97,9 @@ args.model_path = "Baichuan_13B_Chat"
 args.train_data_dir = "news-commentary-v13-zh-en_Baichuan_13B_Chat"
 args.eval_data_dir = ""
 args.checkpoint_dir = "check"
+args.from_pretrianed_checkpoint = ""
 args.resume_dir = ""
-args.load_module_only = False # It should be 'True' if hyper-parameters are modified, such as batch_size, world_size, train_data etc.
+args.resume_module_only = True # It should be 'True' if hyper-parameters are modified, such as batch_size, world_size, train_data etc.
 args.steps_per_checkpoint = -1
 args.zero_stage=0
 args.num_train_epochs=1
@@ -208,6 +209,8 @@ def main():
     if args.eval_data_dir:
         eval_data_partitions = [os.path.join(args.eval_data_dir,f) for f in os.listdir(args.eval_data_dir) if os.path.isdir(os.path.join(args.eval_data_dir,f))]
     
+    if args.from_pretrianed_checkpoint:
+        engine.load_checkpoint(args.from_pretrianed_checkpoint,load_module_only=True)
 
     time_scale = 1.
     checkpoint_memory=[]
@@ -215,11 +218,12 @@ def main():
     skiped_partition_id = 0
     skiped_step = -1
     if args.resume_dir:
-        ckpt_file,ckpt_config=engine.load_checkpoint(args.resume_dir,load_module_only=args.load_module_only)
+        ckpt_file,ckpt_config=engine.load_checkpoint(args.resume_dir,load_module_only=args.resume_module_only)
         skiped_epoch = ckpt_config["ds_config"]["epoch"]
-        skiped_partition_id = ckpt_config["ds_config"]["partition_id"] # plus 1 if you want to skip this data partition
-        if not args.load_module_only:
+        skiped_partition_id = ckpt_config["ds_config"]["partition_id"] + 1 # plus 1 to skip trained partition
+        if not args.resume_module_only:
             assert ds_config['train_batch_size'] == ckpt_config["ds_config"]["train_batch_size"]
+            skiped_partition_id -= 1
             skiped_step = ckpt_config["ds_config"]["step"]
             engine.global_steps = int(ckpt_file.rsplit("/",2)[1])
             checkpoint_memory.append(engine.global_steps)
@@ -257,13 +261,21 @@ def main():
             cur_train_bacth_steps = int(np.ceil(cur_num_train_bacth/args.gradient_accumulation_steps))
             if epoch == skiped_epoch and partition_id == skiped_partition_id :
                 if skiped_step == cur_train_bacth_steps -1:
+                    print_rank_0(f"Wash the memory of train data clean for {read_train_time} seconds ......",args.global_rank)
+                    del train_iter
+                    del train_loader
+                    del train_dataloader
+                    del train_dataset
+                    del train_data
+                    gc.collect()
+                    [time.sleep(read_train_time/100) for _ in tqdm(range(100))]
                     continue
                 start_step = skiped_step + 1
                 for _ in range(start_step):
                     next(train_iter)
             accumulation_train_steps += cur_train_bacth_steps - start_step
             print_rank_0(
-                f" Total Partition Steps: {accumulation_train_steps}/{num_training_steps}.",
+                f"Total Partition Steps: {accumulation_train_steps}/{num_training_steps}.",
                 args.global_rank)
             for step in range(start_step,cur_train_bacth_steps):
                 loss = engine.train_batch(data_iter=train_iter)
