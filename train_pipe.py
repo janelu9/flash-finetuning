@@ -99,7 +99,6 @@ args.eval_data_dir = ""
 args.checkpoint_dir = "check"
 args.from_pretrianed_checkpoint = ""
 args.resume_dir = ""
-args.resume_module_only = True # It should be 'True' if hyper-parameters are modified, such as batch_size, world_size, train_data etc.
 args.steps_per_checkpoint = -1
 args.zero_stage=0
 args.num_train_epochs=1
@@ -210,7 +209,13 @@ def main():
         eval_data_partitions = [os.path.join(args.eval_data_dir,f) for f in os.listdir(args.eval_data_dir) if os.path.isdir(os.path.join(args.eval_data_dir,f))]
     
     if args.from_pretrianed_checkpoint:
-        engine.load_checkpoint(args.from_pretrianed_checkpoint,load_module_only=True)
+        if engine.bfloat16_enabled():
+            engine._config.bfloat16_enabled = False
+            engine.load_checkpoint(args.from_pretrianed_checkpoint,load_module_only=True)
+            engine._config.bfloat16_enabled = True
+            engine.optimizer._restore_from_bit16_weights()
+        else:
+            engine.load_checkpoint(args.from_pretrianed_checkpoint,load_module_only=True)
 
     time_scale = 1.
     checkpoint_memory=[]
@@ -218,15 +223,13 @@ def main():
     skiped_partition_id = 0
     skiped_step = -1
     if args.resume_dir:
-        ckpt_file,ckpt_config=engine.load_checkpoint(args.resume_dir,load_module_only=args.resume_module_only)
+        ckpt_file,ckpt_config=engine.load_checkpoint(args.resume_dir)
         skiped_epoch = ckpt_config["ds_config"]["epoch"]
-        skiped_partition_id = ckpt_config["ds_config"]["partition_id"] + 1 # plus 1 to skip trained partition
-        if not args.resume_module_only:
-            assert ds_config['train_batch_size'] == ckpt_config["ds_config"]["train_batch_size"]
-            skiped_partition_id -= 1
-            skiped_step = ckpt_config["ds_config"]["step"]
-            engine.global_steps = int(ckpt_file.rsplit("/",2)[1])
-            checkpoint_memory.append(engine.global_steps)
+        skiped_partition_id = ckpt_config["ds_config"]["partition_id"]
+        assert ds_config['train_batch_size'] == ckpt_config["ds_config"]["train_batch_size"]
+        skiped_step = ckpt_config["ds_config"]["step"]
+        engine.global_steps = int(ckpt_file.rsplit("/",2)[1])
+        checkpoint_memory.append(engine.global_steps)
         
     accumulation_train_steps = engine.global_steps
     print_rank_0(args, args.global_rank)
