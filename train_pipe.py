@@ -262,11 +262,7 @@ def main():
             if epoch == skiped_epoch and partition_id == skiped_partition_id :
                 if skiped_step == cur_train_bacth_steps -1:
                     print_rank_0(f"Wash the memory of train data clean for {read_train_time} seconds ......",args.global_rank)
-                    del train_iter
-                    del train_loader
-                    del train_dataloader
-                    del train_dataset
-                    del train_data
+                    del train_iter; del train_loader; del train_dataloader; del train_dataset;del train_data
                     gc.collect()
                     [time.sleep(read_train_time/100) for _ in tqdm(range(100))]
                     continue
@@ -310,11 +306,7 @@ def main():
                             eval_loss += loss
                         print_rank_0(f"Wash the memory of eval data clean for {read_eval_time} seconds ......",args.global_rank)
                         engine.set_dataiterator(None)
-                        del eval_iter
-                        del eval_loader
-                        del eval_dataloader
-                        del eval_dataset
-                        del eval_data
+                        del eval_iter;del eval_loader;del eval_dataloader;del eval_dataset;del eval_data
                         gc.collect()
                         [time.sleep(read_eval_time/100) for _ in tqdm(range(100))]
                     print_rank_0(f"************************ eval loss: {eval_loss/num_samples}************************ ",args.global_rank)
@@ -330,11 +322,7 @@ def main():
                     checkpoint_memory.append(steps)
             print_rank_0(f"Wash the memory of train data clean for {read_train_time} seconds ......",args.global_rank)
             engine.set_dataiterator(None)
-            del train_iter
-            del train_loader
-            del train_dataloader
-            del train_dataset
-            del train_data
+            del train_iter;del train_loader;del train_dataloader;del train_dataset;del train_data
             gc.collect()
             [time.sleep(read_train_time/100) for _ in tqdm(range(100))]
             
