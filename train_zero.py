@@ -30,10 +30,10 @@ from lora import (
     convert_linear_layer_to_lora,
     convert_lora_to_linear_layer,
     only_optimize_lora_parameters)
-from transformers.deepspeed import HfDeepSpeedConfig
+# from transformers.deepspeed import HfDeepSpeedConfig
 from deepspeed.ops.adam import DeepSpeedCPUAdam, FusedAdam
-from torch.utils.train_data import DataLoader
-from torch.utils.train_data.distributed import DistributedSampler
+from torch.utils.data import DataLoader
+from torch.utils.data.distributed import DistributedSampler
 import numpy as np
 import os
 import gc
@@ -114,8 +114,8 @@ def main():
     torch.distributed.barrier()
     
     model = LlamaForCausalLM.from_pretrained(args.model_path)
-    dschf = HfDeepSpeedConfig(ds_config)
-    print_rank_0(dschf,args.global_rank)
+    # dschf = HfDeepSpeedConfig(ds_config)
+    # print_rank_0(dschf,args.global_rank)
     if args.lora_dim > 0:
         model = convert_linear_layer_to_lora(
             model,

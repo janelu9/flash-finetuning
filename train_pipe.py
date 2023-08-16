@@ -97,7 +97,7 @@ args.model_path = "Baichuan_13B_Chat"
 args.train_data_dir = "news-commentary-v13-zh-en_Baichuan_13B_Chat"
 args.eval_data_dir = ""
 args.checkpoint_dir = "check"
-args.from_pretrianed_checkpoint = ""
+args.from_pretrianed_checkpoint = "check"
 args.resume_dir = ""
 args.steps_per_checkpoint = -1
 args.zero_stage=0
@@ -217,7 +217,7 @@ def main():
         else:
             engine.load_checkpoint(args.from_pretrianed_checkpoint,load_module_only=True)
 
-    time_scale = 1.
+    
     checkpoint_memory=[]
     skiped_epoch = 0
     skiped_partition_id = 0
@@ -231,6 +231,7 @@ def main():
         engine.global_steps = int(ckpt_file.rsplit("/",2)[1])
         checkpoint_memory.append(engine.global_steps)
         
+    time_scale = 1.   
     accumulation_train_steps = engine.global_steps
     print_rank_0(args, args.global_rank)
     for epoch in range(args.num_train_epochs):
