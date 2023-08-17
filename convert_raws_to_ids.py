@@ -1,11 +1,8 @@
 #!/usr/bin/env python
 # coding: utf-8
-# Created on Thur Jun 29 09:36:49 2023
-# @author: Lu Jian
-# Email:janelu@live.cn;
 
 from functools import partial
-from transformers import LlamaTokenizer
+from transformers import AutoTokenizer,LlamaTokenizer
 from models.baichuan.tokenization_baichuan import BaichuanTokenizer
 from concurrent.futures import ThreadPoolExecutor,ProcessPoolExecutor
 import pyarrow.parquet
@@ -20,6 +17,8 @@ PROMPT_BEGIN: str = 'BEGINNING OF CONVERSATION: '
 PROMPT_USER: str = 'USER: {input} '
 PROMPT_ASSISTANT: str = 'ASSISTANT: {answer}'  # should not have a space at the end
 PROMPT_INPUT: str = PROMPT_BEGIN + PROMPT_USER
+USER_TOKEN_ID = 195
+ASSISTANT_TOKEN_ID = 196
 IGNORE_TOKEN_ID: int = -100
 MAX_SEQ_LENGTH: int  = 2048
 ASSISTANT_LENGTH: int = 5
@@ -28,7 +27,36 @@ FILTER_LENGTH: int  = 256
 PATTERN: str = "请将下文翻译为英文：{inp}"
 
 def clean_wikitext(string):
-    """TODO"""
+    """ cleaning wikitext dataset"""
+    # contractions
+    string = string.replace("s '", "s'")
+    string = re.sub(r"/' [0-9]/", r"/'[0-9]/", string)
+    # number separators
+    string = string.replace(" @-@ ", "-")
+    string = string.replace(" @,@ ", ",")
+    string = string.replace(" @.@ ", ".")
+    # punctuation
+    string = string.replace(" : ", ": ")
+    string = string.replace(" ; ", "; ")
+    string = string.replace(" . ", ". ")
+    string = string.replace(" ! ", "! ")
+    string = string.replace(" ? ", "? ")
+    string = string.replace(" , ", ", ")
+    # double brackets
+    string = re.sub(r"\(\s*([^\)]*?)\s*\)", r"(\1)", string)
+    string = re.sub(r"\[\s*([^\]]*?)\s*\]", r"[\1]", string)
+    string = re.sub(r"{\s*([^}]*?)\s*}", r"{\1}", string)
+    string = re.sub(r"\"\s*([^\"]*?)\s*\"", r'"\1"', string)
+    string = re.sub(r"'\s*([^']*?)\s*'", r"'\1'", string)
+    # miscellaneous
+    string = string.replace("= = = =", "====")
+    string = string.replace("= = =", "===")
+    string = string.replace("= =", "==")
+    string = string.replace(" "+chr(176)+" ", chr(176))
+    string = string.replace(" \n", "\n")
+    string = string.replace("\n ", "\n")
+    string = string.replace(" N ", " 1 ")
+    string = string.replace(" 's", "'s")
     return string
 
 def wiki_generator(file,sep="\n\n"):
@@ -68,43 +96,76 @@ def qa_generator(file):
             yield line
             line = f.readline()
 
-def token_qa(file,tokenizer):
+def token_qa(file,tokenizer,use_special_token_id=False):
     for sample in qa_generator(file):
         inp_anses = sample.strip().split("\t") # example data format: Input\tAnswer, modify by your will.
         offsets=[0]
         inp_ans=inp_anses[:2]
         if len(inp_ans)==2:
             inp,ans=inp_ans
-            prompt = PROMPT_INPUT.format(input=PATTERN.format(inp=inp))
-            ids=tokenizer.encode(prompt)
-            offsets.append(len(ids) + ASSISTANT_LENGTH)
-            ads=tokenizer.encode(PROMPT_ASSISTANT.format(answer=ans))[1:]
-            ids.extend(ads)
-            ids.append(tokenizer.eos_token_id)
-            offsets.append(len(ids))
-            if offsets[-1] > MAX_SEQ_LENGTH:
-                offsets[1] = int((offsets[1] - ASSISTANT_LENGTH)/offsets[-1]*MAX_SEQ_LENGTH)
-                ids = ids[:offsets[1]]
-                ids.extend(ads[:MAX_SEQ_LENGTH - offsets[1] - 1])
+            if use_special_token_id:
+                ids = [tokenizer.bos_token_id,USER_TOKEN_ID]
+                ids.extend(tokenizer.encode(inp)[1:])
+                offsets.append(len(ids) + 1)
+                ads = [ASSISTANT_TOKEN_ID]
+                ads.extend(tokenizer.encode(ans)[1:])
+                ids.extend(ads)
                 ids.append(tokenizer.eos_token_id)
-                offsets[1] += ASSISTANT_LENGTH
-                offsets[-1] = len(ids)
-            # for dialog
-            i = 2
-            while i < len(inp_anses) -1 and offsets[-1] < MAX_SEQ_LENGTH:
-                inp_ans=inp_anses[i:i+2]
-                if len(inp_ans)==2:
-                    inp,ans=inp_ans
-                    prompt = PROMPT_USER.format(input=inp)
-                    ids.extend(tokenizer.encode(prompt)[1:])
-                    offsets.append(len(ids) + ASSISTANT_LENGTH)
-                    if offsets[-1] >= MAX_SEQ_LENGTH:
-                        break
-                    ads=tokenizer.encode(PROMPT_ASSISTANT.format(answer=ans))[1:]
-                    ids.extend(ads)
+                offsets.append(len(ids))
+                if offsets[-1] > MAX_SEQ_LENGTH:
+                    offsets[1] = int((offsets[1] - 1)/offsets[-1]*MAX_SEQ_LENGTH)
+                    ids = ids[:offsets[1]]
+                    ids.extend(ads[:MAX_SEQ_LENGTH - offsets[1] - 1])
                     ids.append(tokenizer.eos_token_id)
-                    offsets.append(len(ids))
-                    i += 2
+                    offsets[1] += 1
+                    offsets[-1] = len(ids)
+                # for dialog
+                i = 2
+                while i < len(inp_anses) -1 and offsets[-1] < MAX_SEQ_LENGTH:
+                    inp_ans=inp_anses[i:i+2]
+                    if len(inp_ans)==2:
+                        inp,ans=inp_ans
+                        ids.extend(USER_TOKEN_ID)
+                        ids.extend(tokenizer.encode(inp)[1:])
+                        offsets.append(len(ids) + 1)
+                        if offsets[-1] >= MAX_SEQ_LENGTH:
+                            break
+                        ads = [ASSISTANT_TOKEN_ID]
+                        ads.extend(tokenizer.encode(ans)[1:])
+                        ids.extend(ads)
+                        ids.append(tokenizer.eos_token_id)
+                        offsets.append(len(ids))
+                        i += 2
+            else:
+                prompt = PROMPT_INPUT.format(input=PATTERN.format(inp=inp))
+                ids=tokenizer.encode(prompt)
+                offsets.append(len(ids) + ASSISTANT_LENGTH)
+                ads=tokenizer.encode(PROMPT_ASSISTANT.format(answer=ans))[1:]
+                ids.extend(ads)
+                ids.append(tokenizer.eos_token_id)
+                offsets.append(len(ids))
+                if offsets[-1] > MAX_SEQ_LENGTH:
+                    offsets[1] = int((offsets[1] - ASSISTANT_LENGTH)/offsets[-1]*MAX_SEQ_LENGTH)
+                    ids = ids[:offsets[1]]
+                    ids.extend(ads[:MAX_SEQ_LENGTH - offsets[1] - 1])
+                    ids.append(tokenizer.eos_token_id)
+                    offsets[1] += ASSISTANT_LENGTH
+                    offsets[-1] = len(ids)
+                i = 2
+                while i < len(inp_anses) -1 and offsets[-1] < MAX_SEQ_LENGTH:
+                    inp_ans=inp_anses[i:i+2]
+                    if len(inp_ans)==2:
+                        inp,ans=inp_ans
+                        prompt = PROMPT_USER.format(input=inp)
+                        ids.extend(tokenizer.encode(prompt)[1:])
+                        offsets.append(len(ids) + ASSISTANT_LENGTH)
+                        if offsets[-1] >= MAX_SEQ_LENGTH:
+                            break
+                        ads=tokenizer.encode(PROMPT_ASSISTANT.format(answer=ans))[1:]
+                        ids.extend(ads)
+                        ids.append(tokenizer.eos_token_id)
+                        offsets.append(len(ids))
+                        i += 2
             pad = [tokenizer.pad_token_id]*(MAX_SEQ_LENGTH - offsets[-1])
             ids = ids[:min(MAX_SEQ_LENGTH,offsets[-1])-1]
             ids.append(tokenizer.eos_token_id)
@@ -116,15 +177,47 @@ def token_qa(file,tokenizer):
                 if s<MAX_SEQ_LENGTH:
                     labels[s:e] = IGNORE_TOKEN_ID
             yield {"input_ids":input_ids,"labels":labels}
+
+def write_mindrecord(filename,output_dir,dtype):
+    tokenizer = LlamaTokenizer.from_pretrained(args.tokenizer,fast_tokenizer=True)
+    tokenizer.pad_token_id=0
+    token = token_wiki
+    batch_size = 1024  # size of write batch
+    schema = {'input_ids': {"type": "int32", "shape": [-1]}}
+    if dtype == 'qa':
+        schema.update( {'labels': {"type": "int32", "shape": [-1]}})
+        token = token_qa
+    item_iter = token(filename,tokenizer)
+    file=os.path.splitext(os.path.basename(filename))[0]
+    check_file = os.path.join(output_dir , "." + file + ".mindrecord.crc")
+    if os.path.exists(check_file):
+        print(f"{check_file} exists, continue!")
+        return
+    writer = FileWriter(file_name=os.path.join(output_dir , file + ".mindrecord"))
+    writer.add_schema(schema, dtype)
+    writer.open_and_set_header()
+    data_batch = []
+    for i,data in tqdm.tqdm(enumerate(item_iter)):
+        data_batch.append(data)
+        if len(data_batch) == batch_size:
+            writer.write_raw_data(data_batch, parallel_writer=False)
+            data_batch=[]
+    if data_batch:
+        writer.write_raw_data(data_batch,parallel_writer=False)
+    writer.commit()
+    os.system(f"echo {i+1} {MAX_SEQ_LENGTH} > {check_file}")
+    print(f"{filename} saved with {i+1} samples")
+    gc.collect()
    
 def write_parquet(filename,output_dir,dtype,compression):
-    tokenizer = LlamaTokenizer.from_pretrained(args.tokenizer, fast_tokenizer = True, add_bos_token = True)
+    #tokenizer = LlamaTokenizer.from_pretrained(args.tokenizer,fast_tokenizer=True)
+    tokenizer = BaichuanTokenizer.from_pretrained(args.tokenizer,fast_tokenizer=False, add_bos_token = True)
     tokenizer.pad_token_id=0
     token = token_wiki
     batch_size = args.batch_size  # size of write batch
     keys = ["input_ids"]
     if dtype == 'qa':
-        token = token_qa
+        token = partial(token_qa,use_special_token_id=isinstance(tokenizer,BaichuanTokenizer))
         keys.append("labels")
     data_batch={k:[] for k in keys}
     item_iter = token(filename,tokenizer)
@@ -165,6 +258,7 @@ parser.add_argument('-c', type=str, default="gzip",choices=('gzip','brotli','sna
 parser.add_argument('--batch_size', type=int, default=2**15)
 parser.add_argument('--seq_len', type=int, default=2**11)
 parser.add_argument('--cores', type=int, default=-1)
+parser.add_argument('--format', type=str, default="parquet")
 parser.add_argument('--tokenizer', type=str, default="openlm-research/open_llama_13b")
 parser.add_argument('--tmp', type=str, default="tmp")
 parser.add_argument('-T', action='store_true', help="thread")
@@ -199,7 +293,12 @@ if __name__=='__main__':
     cpus=int(os.cpu_count()*0.8) if args.cores <0 else  args.cores
     print(f"########## begine converting {args.t} data with {cpus} executors.###########" )
     with Pool(max_workers=cpus) as exe:
-        func = partial(write_parquet,output_dir=output_dir,dtype=args.t,compression=compression)
+        if args.format == "parquet":
+            func = partial(write_parquet,output_dir=output_dir,dtype=args.t,compression=compression)
+        else:
+            from mindspore.mindrecord import FileWriter
+            MAX_SEQ_LENGTH+=1
+            func = partial(write_mindrecord,output_dir=output_dir,dtype=args.t)
         files =[os.path.join(tmp, i) for i in os.listdir(tmp)]
         files.sort()
         np.random.shuffle(files)
@@ -233,5 +332,5 @@ if __name__=='__main__':
     /mnt/e/NLP/tmp/news-commentary-v13-zh-en-part-02 saved with 29999 samples
     /mnt/e/NLP/tmp/news-commentary-v13-zh-en-part-07 saved with 30000 samples
     /mnt/e/NLP/tmp/news-commentary-v13-zh-en-part-03 saved with 30000 samples
-    /mnt/e/NLP/news-commentary-v13-zh-en.txt has been converted into /mnt/e/NLP/news-commentary-v13-zh-en_open_llama_13b successfully!
+    /mnt/e/NLP/news-commentary-v13-zh-en.txt has been converted into /mnt/e/NLP/news-commentary-v13-zh-en_parquet successfully!
     '''
