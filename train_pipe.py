@@ -93,11 +93,11 @@ parser.add_argument('--only_optimize_lora',
 parser = deepspeed.add_config_arguments(parser)
 
 args=parser.parse_args()
-args.model_path = "Baichuan_13B_Chat"
-args.train_data_dir = "news-commentary-v13-zh-en_Baichuan_13B_Chat"
+args.model_path = "openlm-research/open_llama_13b"
+args.train_data_dir = "news-commentary-v13-zh-en_open_llama_13b"
 args.eval_data_dir = ""
 args.checkpoint_dir = "check"
-args.from_pretrianed_checkpoint = "check"
+args.from_pretrianed_checkpoint = ""
 args.resume_dir = ""
 args.steps_per_checkpoint = -1
 args.zero_stage=0
@@ -145,13 +145,13 @@ def main():
         os.system(f"mkdir -p {args.checkpoint_dir}")
     torch.distributed.barrier()
 
-    config=BaichuanConfig.from_pretrained(args.model_path)
+    config=LlamaConfig.from_pretrained(args.model_path)
     topo = PipeModelDataParallelTopology(
         num_pp = args.pipe_parallel_size,
         num_mp = args.model_parallel_size,
         num_dp = args.data_parallel_size)
     args.seed = args.seed + topo.get_coord(args.global_rank).pipe
-    model = BaichuanForCausalLMPipe(
+    model = LlamaForCausalLMPipe(
         config,
         args.gradient_checkpointing,
         args.fast,
