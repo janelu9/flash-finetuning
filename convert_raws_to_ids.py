@@ -233,5 +233,5 @@ if __name__=='__main__':
     /mnt/e/NLP/tmp/news-commentary-v13-zh-en-part-02 saved with 29999 samples
     /mnt/e/NLP/tmp/news-commentary-v13-zh-en-part-07 saved with 30000 samples
     /mnt/e/NLP/tmp/news-commentary-v13-zh-en-part-03 saved with 30000 samples
-    /mnt/e/NLP/news-commentary-v13-zh-en.txt has been converted into /mnt/e/NLP/news-commentary-v13-zh-en_parquet successfully!
+    /mnt/e/NLP/news-commentary-v13-zh-en.txt has been converted into /mnt/e/NLP/news-commentary-v13-zh-en_open_llama_13b successfully!
     '''
