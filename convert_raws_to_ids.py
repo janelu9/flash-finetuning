@@ -27,36 +27,7 @@ FILTER_LENGTH: int  = 256
 PATTERN: str = "请将下文翻译为英文：{inp}"
 
 def clean_wikitext(string):
-    """ cleaning wikitext dataset"""
-    # contractions
-    string = string.replace("s '", "s'")
-    string = re.sub(r"/' [0-9]/", r"/'[0-9]/", string)
-    # number separators
-    string = string.replace(" @-@ ", "-")
-    string = string.replace(" @,@ ", ",")
-    string = string.replace(" @.@ ", ".")
-    # punctuation
-    string = string.replace(" : ", ": ")
-    string = string.replace(" ; ", "; ")
-    string = string.replace(" . ", ". ")
-    string = string.replace(" ! ", "! ")
-    string = string.replace(" ? ", "? ")
-    string = string.replace(" , ", ", ")
-    # double brackets
-    string = re.sub(r"\(\s*([^\)]*?)\s*\)", r"(\1)", string)
-    string = re.sub(r"\[\s*([^\]]*?)\s*\]", r"[\1]", string)
-    string = re.sub(r"{\s*([^}]*?)\s*}", r"{\1}", string)
-    string = re.sub(r"\"\s*([^\"]*?)\s*\"", r'"\1"', string)
-    string = re.sub(r"'\s*([^']*?)\s*'", r"'\1'", string)
-    # miscellaneous
-    string = string.replace("= = = =", "====")
-    string = string.replace("= = =", "===")
-    string = string.replace("= =", "==")
-    string = string.replace(" "+chr(176)+" ", chr(176))
-    string = string.replace(" \n", "\n")
-    string = string.replace("\n ", "\n")
-    string = string.replace(" N ", " 1 ")
-    string = string.replace(" 's", "'s")
+    """ TODO"""
     return string
 
 def wiki_generator(file,sep="\n\n"):
@@ -178,36 +149,6 @@ def token_qa(file,tokenizer,use_special_token_id=False):
                     labels[s:e] = IGNORE_TOKEN_ID
             yield {"input_ids":input_ids,"labels":labels}
 
-def write_mindrecord(filename,output_dir,dtype):
-    tokenizer = LlamaTokenizer.from_pretrained(args.tokenizer,fast_tokenizer=True)
-    tokenizer.pad_token_id=0
-    token = token_wiki
-    batch_size = 1024  # size of write batch
-    schema = {'input_ids': {"type": "int32", "shape": [-1]}}
-    if dtype == 'qa':
-        schema.update( {'labels': {"type": "int32", "shape": [-1]}})
-        token = token_qa
-    item_iter = token(filename,tokenizer)
-    file=os.path.splitext(os.path.basename(filename))[0]
-    check_file = os.path.join(output_dir , "." + file + ".mindrecord.crc")
-    if os.path.exists(check_file):
-        print(f"{check_file} exists, continue!")
-        return
-    writer = FileWriter(file_name=os.path.join(output_dir , file + ".mindrecord"))
-    writer.add_schema(schema, dtype)
-    writer.open_and_set_header()
-    data_batch = []
-    for i,data in tqdm.tqdm(enumerate(item_iter)):
-        data_batch.append(data)
-        if len(data_batch) == batch_size:
-            writer.write_raw_data(data_batch, parallel_writer=False)
-            data_batch=[]
-    if data_batch:
-        writer.write_raw_data(data_batch,parallel_writer=False)
-    writer.commit()
-    os.system(f"echo {i+1} {MAX_SEQ_LENGTH} > {check_file}")
-    print(f"{filename} saved with {i+1} samples")
-    gc.collect()
    
 def write_parquet(filename,output_dir,dtype,compression):
     #tokenizer = LlamaTokenizer.from_pretrained(args.tokenizer,fast_tokenizer=True)
@@ -245,7 +186,7 @@ def write_parquet(filename,output_dir,dtype,compression):
                                     out_file % (i//batch_size), 
                                     compression=compression)
     del data_batch                                
-    os.system(f"echo {i+1} {MAX_SEQ_LENGTH} > {check_file}")
+    os.system(f"echo '{i+1} {MAX_SEQ_LENGTH}' > {check_file}")
     print(f"{filename} saved with {i+1} samples")
     gc.collect()
     
@@ -258,7 +199,6 @@ parser.add_argument('-c', type=str, default="gzip",choices=('gzip','brotli','sna
 parser.add_argument('--batch_size', type=int, default=2**15)
 parser.add_argument('--seq_len', type=int, default=2**11)
 parser.add_argument('--cores', type=int, default=-1)
-parser.add_argument('--format', type=str, default="parquet")
 parser.add_argument('--tokenizer', type=str, default="openlm-research/open_llama_13b")
 parser.add_argument('--tmp', type=str, default="tmp")
 parser.add_argument('-T', action='store_true', help="thread")
@@ -293,12 +233,7 @@ if __name__=='__main__':
     cpus=int(os.cpu_count()*0.8) if args.cores <0 else  args.cores
     print(f"########## begine converting {args.t} data with {cpus} executors.###########" )
     with Pool(max_workers=cpus) as exe:
-        if args.format == "parquet":
-            func = partial(write_parquet,output_dir=output_dir,dtype=args.t,compression=compression)
-        else:
-            from mindspore.mindrecord import FileWriter
-            MAX_SEQ_LENGTH+=1
-            func = partial(write_mindrecord,output_dir=output_dir,dtype=args.t)
+        func = partial(write_parquet,output_dir=output_dir,dtype=args.t,compression=compression)
         files =[os.path.join(tmp, i) for i in os.listdir(tmp)]
         files.sort()
         np.random.shuffle(files)
@@ -311,7 +246,7 @@ if __name__=='__main__':
     1929年还是1989年?   1929 or 1989?
     巴黎-随着经济危机不断加深和蔓延，整个世界一直在寻找历史上的类似事件希望有助于我们了解目前正在发生的情况。   PARIS – As the economic crisis deepens and widens, the world has been searching for historical analogies to help us understand what has been happening.
     # python convert_raws_to_ids.py -i news-commentary-v13-zh-en.txt -n 30000
-    Namespace(t='qa', i='news-commentary-v13-zh-en.txt', o='', n=30000, c='gzip', batch_size=32768, cores=-1, format='parquet', tokenizer='openlm-research/open_llama_13b', tmp='tmp', T=False, C=False)
+    Namespace(t='qa', i='news-commentary-v13-zh-en.txt', o='', n=30000, c='gzip', batch_size=32768, cores=-1, tokenizer='openlm-research/open_llama_13b', tmp='tmp', T=False, C=False)
     /mnt/e/NLP
     ########## begine converting qa data with 12 executors.###########
     12777it [00:06, 2018.59it/s]
@@ -332,5 +267,5 @@ if __name__=='__main__':
     /mnt/e/NLP/tmp/news-commentary-v13-zh-en-part-02 saved with 29999 samples
     /mnt/e/NLP/tmp/news-commentary-v13-zh-en-part-07 saved with 30000 samples
     /mnt/e/NLP/tmp/news-commentary-v13-zh-en-part-03 saved with 30000 samples
-    /mnt/e/NLP/news-commentary-v13-zh-en.txt has been converted into /mnt/e/NLP/news-commentary-v13-zh-en_parquet successfully!
+    /mnt/e/NLP/news-commentary-v13-zh-en.txt has been converted into /mnt/e/NLP/news-commentary-v13-zh-en_open_llama_13b successfully!
     '''
