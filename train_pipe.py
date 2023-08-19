@@ -112,18 +112,13 @@ args.learning_rate=3e-4
 args.output_dir = "./output"
 args.pipe_parallel_size = 1
 args.model_parallel_size = 1
-args.gradient_checkpointing = True
+args.gradient_checkpointing = not args.only_optimize_lora
 try:
     import flash_attn
     import xformers
     args.fast = True 
 except:
     args.fast = False 
-    
-if args.gradient_checkpointing and args.lora_dim > 0:
-    assert (
-        not args.only_optimize_lora
-    ), "--gradient_checkpointing and --only_optimize_lora cannot be enabled at the same time."
 
 def main():
     if args.local_rank == -1:

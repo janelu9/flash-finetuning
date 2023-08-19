@@ -85,12 +85,7 @@ args.lr_scheduler_type="cosine"
 args.num_warmup_steps=0
 args.learning_rate=1e-4
 args.output_dir = "./output"
-args.gradient_checkpointing = True
-
-if args.gradient_checkpointing and args.lora_dim > 0:
-    assert (
-        not args.only_optimize_lora
-    ), "--gradient_checkpointing and --only_optimize_lora cannot be enabled at the same time."
+args.gradient_checkpointing = not args.only_optimize_lora
 
 def main():
     if args.local_rank == -1:
