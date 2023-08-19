@@ -229,11 +229,10 @@ def main():
     skiped_step = -1
     if args.resume_dir:
         ckpt_file,ckpt_config=engine.load_checkpoint(args.resume_dir)
+        assert ds_config['train_batch_size'] == ckpt_config["ds_config"]["train_batch_size"]
         skiped_epoch = ckpt_config["ds_config"]["epoch"]
         skiped_partition_id = ckpt_config["ds_config"]["partition_id"]
-        assert ds_config['train_batch_size'] == ckpt_config["ds_config"]["train_batch_size"]
         skiped_step = ckpt_config["ds_config"]["step"]
-        engine.global_steps = int(ckpt_file.rsplit("/",2)[1])
         checkpoint_memory.append(engine.global_steps)
         
     time_scale = 1.   
