@@ -207,23 +207,25 @@ def main():
 
     if args.eval_data_dir:
         eval_data_partitions = [os.path.join(args.eval_data_dir,f) for f in os.listdir(args.eval_data_dir) if os.path.isdir(os.path.join(args.eval_data_dir,f))]
-    
-    if args.from_pretrianed_checkpoint:
-        if engine.bfloat16_enabled():
-            engine._config.bfloat16_enabled = False
-            engine.load_checkpoint(args.from_pretrianed_checkpoint,load_module_only=True)
-            engine._config.bfloat16_enabled = True
-            engine.optimizer._restore_from_bit16_weights()
-        else:
-            engine.load_checkpoint(args.from_pretrianed_checkpoint,load_module_only=True)
-
-    
+        
     checkpoint_memory=[]
     skiped_epoch = 0
     skiped_partition_id = 0
     skiped_step = -1
+    
+    if args.from_pretrianed_checkpoint:
+        if engine.bfloat16_enabled():
+            engine._config.bfloat16_enabled = False
+            _,ckpt_config=engine.load_checkpoint(args.from_pretrianed_checkpoint,load_module_only=True)
+            engine._config.bfloat16_enabled = True
+            engine.optimizer._restore_from_bit16_weights()
+        else:
+            _,ckpt_config=engine.load_checkpoint(args.from_pretrianed_checkpoint,load_module_only=True)
+        skiped_epoch = ckpt_config["ds_config"].get("epoch",0)
+        skiped_partition_id = ckpt_config["ds_config"].get("partition_id",-1) + 1
+
     if args.resume_dir:
-        ckpt_file,ckpt_config=engine.load_checkpoint(args.resume_dir)
+        _,ckpt_config=engine.load_checkpoint(args.resume_dir)
         assert ds_config['train_batch_size'] == ckpt_config["ds_config"]["train_batch_size"]
         skiped_epoch = ckpt_config["ds_config"]["epoch"]
         skiped_partition_id = ckpt_config["ds_config"]["partition_id"]
