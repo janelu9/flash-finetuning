@@ -59,6 +59,24 @@ config = LlamaConfig.from_pretrained(args.model_path)
 model = LlamaForCausalLMPipe(...
 ```
 
+## API Server
+
+Start the server:
+
+```shell
+python server.py --model openlm-research/open_llama_13b
+```
+
+Query the model :
+
+```sehll
+curl http://localhost:8000/generate \
+    -H "Content-Type: application/json" \
+    -d '{
+        "messages":[{"user": "San Francisco is a"},]
+    }'
+```
+
 ## Citation
 
 If you find EasyLLM useful or use EasyLLM  code  in your research, please cite it in your publications.

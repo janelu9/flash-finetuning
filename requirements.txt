@@ -1,6 +1,9 @@
-torch
 transformers
+accelerate
+protobuf==3.20.3
+sentencepiece
 deepspeed
 flash-attn
 xformers
 pyarrow
+vllm
