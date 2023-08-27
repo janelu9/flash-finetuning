@@ -18,27 +18,6 @@ TIMEOUT_KEEP_ALIVE = 5  # seconds.
 TIMEOUT_TO_PREVENT_DEADLOCK = 1  # seconds.
 app = FastAPI()
 
-parser = argparse.ArgumentParser()
-parser.add_argument("--host", type=str, default="localhost")
-parser.add_argument("--port", type=int, default=8000)
-parser = AsyncEngineArgs.add_cli_args(parser)
-args = parser.parse_args()
-engine_args = AsyncEngineArgs.from_cli_args(args)
-model = args.model
-
-engine_args= AsyncEngineArgs(model = model,
-                             trust_remote_code = True,
-                             disable_log_stats = True,
-                             disable_log_requests = True)
-
-engine = AsyncLLMEngine.from_engine_args(engine_args)
-tokenizer = AutoTokenizer.from_pretrained(model, use_fast=False, trust_remote_code=True)
-generation_config = GenerationConfig.from_pretrained(model)
-
-max_new_tokens = generation_config.max_new_tokens
-max_input_tokens = max(tokenizer.model_max_length // 2, tokenizer.model_max_length - max_new_tokens)
-role_id = {'user':[generation_config.user_token_id],'assistant':[generation_config.assistant_token_id]}
-
 def get_input_ids(messages):
     input_ids = role_id['assistant']
     for message in reversed(messages):
@@ -52,14 +31,6 @@ def get_input_ids(messages):
             break
     return input_ids[-max_input_tokens:]
     
-sampling_params_default=SamplingParams(frequency_penalty=0.7,
-                                       top_k =generation_config.top_k,
-                                       top_p = generation_config.top_p, 
-                                       temperature = generation_config.temperature,
-                                       max_tokens = generation_config.max_new_tokens)
-
-
-
 @app.post("/generate")
 async def generate(request: Request) -> Response:
     """Generate completion for the request.
@@ -73,8 +44,8 @@ async def generate(request: Request) -> Response:
     messages = request_dict.pop("messages")
     stream = request_dict.pop("stream", False)
     sampling_params = sampling_params_default
-    if 'samplingparams' in request_dict:
-        sampling_params = SamplingParams(**request_dict["samplingparams"])
+    if 'sampling' in request_dict:
+        sampling_params = SamplingParams(**request_dict["sampling"])
     request_id = random_uuid()
     input_ids = get_input_ids(messages)
     results_generator = engine.generate(None,sampling_params,request_id,prompt_token_ids=input_ids)
@@ -113,6 +84,29 @@ async def generate(request: Request) -> Response:
 
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--host", type=str, default="localhost")
+    parser.add_argument("--port", type=int, default=8000)
+    parser = AsyncEngineArgs.add_cli_args(parser)
+    args = parser.parse_args()
+    args.trust_remote_code = True
+    # engine_args= AsyncEngineArgs(model = model,
+                                 # trust_remote_code = True,
+                                 # disable_log_stats = True,
+                                 # disable_log_requests = True)
+    engine_args = AsyncEngineArgs.from_cli_args(args)
+    engine = AsyncLLMEngine.from_engine_args(engine_args)
+    tokenizer = AutoTokenizer.from_pretrained(args.model, use_fast=False, trust_remote_code=True)
+    generation_config = GenerationConfig.from_pretrained(args.model)
+
+    max_new_tokens = generation_config.max_new_tokens
+    max_input_tokens = max(tokenizer.model_max_length // 2, tokenizer.model_max_length - max_new_tokens)
+    role_id = {'user':[generation_config.user_token_id],'assistant':[generation_config.assistant_token_id]}
+    sampling_params_default = SamplingParams(frequency_penalty=0.7,
+                                             top_k =generation_config.top_k,
+                                             top_p = generation_config.top_p, 
+                                             temperature = generation_config.temperature,
+                                             max_tokens = generation_config.max_new_tokens)
     uvicorn.run(app,
                 host=args.host,
                 port=args.port,
