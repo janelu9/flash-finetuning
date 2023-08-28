@@ -18,11 +18,18 @@ TIMEOUT_KEEP_ALIVE = 5  # seconds.
 TIMEOUT_TO_PREVENT_DEADLOCK = 1  # seconds.
 app = FastAPI()
 
-def get_input_ids(prompt):
-    input_ids = role_id['user']
-    input_ids.extend(tokenizer.encode(prompt))
-    input_ids.extend(role_id['assistant'])
-    return input_ids
+def get_input_ids(messages):
+    input_ids = role_id['assistant']
+    for message in reversed(messages):
+        k,v = next(iter(message.items()))
+        temp_ids = role_id[k].copy()
+        token_ids = tokenizer.encode(v)
+        temp_ids.extend(token_ids)
+        temp_ids.extend(input_ids)
+        input_ids = temp_ids
+        if len(input_ids) >= max_input_tokens:
+            break
+    return input_ids[-max_input_tokens:]
     
 @app.post("/generate")
 async def generate(request: Request) -> Response:
@@ -34,13 +41,13 @@ async def generate(request: Request) -> Response:
     - other fields: the sampling parameters (See `SamplingParams` for details).
     """
     request_dict = await request.json()
-    prompt = request_dict.pop("prompt")
+    messages = request_dict.pop("messages")
     stream = request_dict.pop("stream", False)
     sampling = sampling_params_default.copy()
     sampling.update(request_dict.get("sampling",{}))
     sampling_params = SamplingParams(**sampling)
     request_id = random_uuid()
-    input_ids = get_input_ids(prompt)
+    input_ids = get_input_ids(messages)
     results_generator = engine.generate(None,sampling_params,request_id,prompt_token_ids=input_ids)
 
     # Streaming case
@@ -96,10 +103,10 @@ if __name__ == "__main__":
     max_input_tokens = max(tokenizer.model_max_length // 2, tokenizer.model_max_length - max_new_tokens)
     role_id = {'user':[generation_config.user_token_id],'assistant':[generation_config.assistant_token_id]}
     sampling_params_default = dict(frequency_penalty=0.7,
-                                             top_k =generation_config.top_k,
-                                             top_p = generation_config.top_p, 
-                                             temperature = generation_config.temperature,
-                                             max_tokens = generation_config.max_new_tokens)
+                                   top_k =generation_config.top_k,
+                                   top_p = generation_config.top_p, 
+                                   temperature = generation_config.temperature,
+                                   max_tokens = generation_config.max_new_tokens)
     uvicorn.run(app,
                 host=args.host,
                 port=args.port,
