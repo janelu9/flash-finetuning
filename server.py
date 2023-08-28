@@ -43,9 +43,9 @@ async def generate(request: Request) -> Response:
     request_dict = await request.json()
     messages = request_dict.pop("messages")
     stream = request_dict.pop("stream", False)
-    sampling_params = sampling_params_default
-    if 'sampling' in request_dict:
-        sampling_params = SamplingParams(**request_dict["sampling"])
+    sampling = sampling_params_default.copy()
+    sampling.update(request_dict.get("sampling",{}))
+    sampling_params = SamplingParams(**sampling)
     request_id = random_uuid()
     input_ids = get_input_ids(messages)
     results_generator = engine.generate(None,sampling_params,request_id,prompt_token_ids=input_ids)
@@ -102,7 +102,7 @@ if __name__ == "__main__":
     max_new_tokens = generation_config.max_new_tokens
     max_input_tokens = max(tokenizer.model_max_length // 2, tokenizer.model_max_length - max_new_tokens)
     role_id = {'user':[generation_config.user_token_id],'assistant':[generation_config.assistant_token_id]}
-    sampling_params_default = SamplingParams(frequency_penalty=0.7,
+    sampling_params_default = dict(frequency_penalty=0.7,
                                              top_k =generation_config.top_k,
                                              top_p = generation_config.top_p, 
                                              temperature = generation_config.temperature,
