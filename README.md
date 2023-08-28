@@ -42,21 +42,27 @@ If you want to switch to another model in the `models` folder,  modify these thr
 
 ```python
 #convert_raws_to_ids.py:
-tokenizer = LlamaTokenizer.from_pretrained(args.tokenizer, fast_tokenizer = True, add_bos_token = True)
+tokenizer = BaichuanTokenizer.from_pretrained(args.tokenizer, ...
 ```
 
 **Model config**
 
 ```python
 #train_pipe.py:
-config = LlamaConfig.from_pretrained(args.model_path)
+config = BaichuanConfig.from_pretrained(args.model_path)
 ```
 
  **Pipeline module**
 
 ```python
 #train_pipe.py:
-model = LlamaForCausalLMPipe(...
+model = BaichuanForCausalLMPipe(...
+```
+
+## Batch Inference
+
+```shell
+python batch_infer.py --model baichuan-inc/Baichuan-13B-Chat --prompt-file prompt.txt
 ```
 
 ## API Server
@@ -64,7 +70,7 @@ model = LlamaForCausalLMPipe(...
 Start the server:
 
 ```shell
-python server.py --model openlm-research/open_llama_13b
+python server.py --model baichuan-inc/Baichuan-13B-Chat
 ```
 
 Query the model :
