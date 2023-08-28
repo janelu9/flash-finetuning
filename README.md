@@ -73,8 +73,8 @@ Query the model :
 curl http://localhost:8000/generate \
     -H "Content-Type: application/json" \
     -d '{
-        "messages":[{"user": "San Francisco is a"}],
-        "sampling":{"max_tokens":32}
+        "prompt": "San Francisco is a",
+        "sampling": {"max_tokens":32}
     }'
 ```
 
