@@ -19,7 +19,7 @@ TIMEOUT_TO_PREVENT_DEADLOCK = 1  # seconds.
 app = FastAPI()
 
 def get_input_ids(messages):
-    input_ids = role_id['assistant']
+    input_ids = []
     for message in reversed(messages):
         k,v = next(iter(message.items()))
         temp_ids = role_id[k].copy()
@@ -29,6 +29,8 @@ def get_input_ids(messages):
         input_ids = temp_ids
         if len(input_ids) >= max_input_tokens:
             break
+    if k != 'assistant':
+        input_ids.extend(role_id['assistant'])
     return input_ids[-max_input_tokens:]
     
 @app.post("/generate")

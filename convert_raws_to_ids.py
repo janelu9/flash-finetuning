@@ -75,7 +75,7 @@ def token_qa(file,tokenizer,use_special_token_id=False):
         if len(inp_ans)==2:
             inp,ans=inp_ans
             if use_special_token_id:
-                ids = [tokenizer.bos_token_id,USER_TOKEN_ID]
+                ids = [USER_TOKEN_ID]
                 ids.extend(tokenizer.encode(inp)[1:])
                 offsets.append(len(ids) + 1)
                 ads = [ASSISTANT_TOKEN_ID]
@@ -96,7 +96,7 @@ def token_qa(file,tokenizer,use_special_token_id=False):
                     inp_ans=inp_anses[i:i+2]
                     if len(inp_ans)==2:
                         inp,ans=inp_ans
-                        ids.extend(USER_TOKEN_ID)
+                        ids.append(USER_TOKEN_ID)
                         ids.extend(tokenizer.encode(inp)[1:])
                         offsets.append(len(ids) + 1)
                         if offsets[-1] >= MAX_SEQ_LENGTH:
@@ -152,13 +152,13 @@ def token_qa(file,tokenizer,use_special_token_id=False):
    
 def write_parquet(filename,output_dir,dtype,compression):
     #tokenizer = LlamaTokenizer.from_pretrained(args.tokenizer,fast_tokenizer=True)
-    tokenizer = BaichuanTokenizer.from_pretrained(args.tokenizer,fast_tokenizer=False, add_bos_token = True)
+    tokenizer = AutoTokenizer.from_pretrained(args.tokenizer,use_fast=False,trust_remote_code=True,add_bos_token = True)
     tokenizer.pad_token_id=0
     token = token_wiki
     batch_size = args.batch_size  # size of write batch
     keys = ["input_ids"]
     if dtype == 'qa':
-        token = partial(token_qa,use_special_token_id=isinstance(tokenizer,BaichuanTokenizer))
+        token = partial(token_qa,use_special_token_id=not isinstance(tokenizer,LlamaTokenizer))
         keys.append("labels")
     data_batch={k:[] for k in keys}
     item_iter = token(filename,tokenizer)
