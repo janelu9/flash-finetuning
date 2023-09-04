@@ -3,7 +3,7 @@
 
 from functools import partial
 from transformers import AutoTokenizer,LlamaTokenizer
-from models.baichuan.tokenization_baichuan import BaichuanTokenizer
+from data.qa_utils import qa_inputs_generator
 from concurrent.futures import ThreadPoolExecutor,ProcessPoolExecutor
 import pyarrow.parquet
 import numpy as np
@@ -21,9 +21,9 @@ USER_TOKEN_ID = 195
 ASSISTANT_TOKEN_ID = 196
 IGNORE_TOKEN_ID: int = -100
 MAX_SEQ_LENGTH: int  = 2048
-ASSISTANT_LENGTH: int = 5
 OVERLAPPING_LENGTH: int  = 128
 FILTER_LENGTH: int  = 256
+ROLE = {'user':[USER_TOKEN_ID],'assistant':[ASSISTANT_TOKEN_ID]}
 PATTERN: str = "请将下文翻译为英文：{inp}"
 
 def clean_wikitext(string):
@@ -67,89 +67,37 @@ def qa_generator(file):
             yield line
             line = f.readline()
 
-def token_qa(file,tokenizer,use_special_token_id=False):
+def token_qa(file,tokenizer):
     for sample in qa_generator(file):
         inp_anses = sample.strip().split("\t") # example data format: Input\tAnswer, modify by your will.
-        offsets=[0]
-        inp_ans=inp_anses[:2]
-        if len(inp_ans)==2:
-            inp,ans=inp_ans
-            if use_special_token_id:
-                ids = [USER_TOKEN_ID]
-                ids.extend(tokenizer.encode(inp)[1:])
-                offsets.append(len(ids) + 1)
-                ads = [ASSISTANT_TOKEN_ID]
-                ads.extend(tokenizer.encode(ans)[1:])
-                ids.extend(ads)
+        if len(inp_anses) > 1:
+            msgs = [{"user":PATTERN.format(inp=content)} if i%2 == 0 else {"assistant":content} for i,content in enumerate(inp_anses)]
+            ids=[];divide=[0];pre_k = "assistant"
+            for msg in msgs:
+                k,v = next(iter(msg.items()))
+                if k != pre_k:
+                    if ids:
+                        divide.append(len(ids)+1)
+                        if k == "user":
+                            ids.append(tokenizer.eos_token_id) 
+                    ids.extend(ROLE[k])
+                    ids.extend(tokenizer.encode(v)[1:])
+                elif ids:
+                    ids.extend(tokenizer.encode(v)[1:])
+                pre_k = k
+                
+            if k == "assistant":
                 ids.append(tokenizer.eos_token_id)
-                offsets.append(len(ids))
-                if offsets[-1] > MAX_SEQ_LENGTH:
-                    offsets[1] = int((offsets[1] - 1)/offsets[-1]*MAX_SEQ_LENGTH)
-                    ids = ids[:offsets[1]]
-                    ids.extend(ads[:MAX_SEQ_LENGTH - offsets[1] - 1])
-                    ids.append(tokenizer.eos_token_id)
-                    offsets[1] += 1
-                    offsets[-1] = len(ids)
-                # for dialog
-                i = 2
-                while i < len(inp_anses) -1 and offsets[-1] < MAX_SEQ_LENGTH:
-                    inp_ans=inp_anses[i:i+2]
-                    if len(inp_ans)==2:
-                        inp,ans=inp_ans
-                        ids.append(USER_TOKEN_ID)
-                        ids.extend(tokenizer.encode(inp)[1:])
-                        offsets.append(len(ids) + 1)
-                        if offsets[-1] >= MAX_SEQ_LENGTH:
-                            break
-                        ads = [ASSISTANT_TOKEN_ID]
-                        ads.extend(tokenizer.encode(ans)[1:])
-                        ids.extend(ads)
-                        ids.append(tokenizer.eos_token_id)
-                        offsets.append(len(ids))
-                        i += 2
+                
+            if len(divide)%2==1:
+                ids=ids[:divide[-1]]
             else:
-                prompt = PROMPT_INPUT.format(input=PATTERN.format(inp=inp))
-                ids=tokenizer.encode(prompt)
-                offsets.append(len(ids) + ASSISTANT_LENGTH)
-                ads=tokenizer.encode(PROMPT_ASSISTANT.format(answer=ans))[1:]
-                ids.extend(ads)
-                ids.append(tokenizer.eos_token_id)
-                offsets.append(len(ids))
-                if offsets[-1] > MAX_SEQ_LENGTH:
-                    offsets[1] = int((offsets[1] - ASSISTANT_LENGTH)/offsets[-1]*MAX_SEQ_LENGTH)
-                    ids = ids[:offsets[1]]
-                    ids.extend(ads[:MAX_SEQ_LENGTH - offsets[1] - 1])
-                    ids.append(tokenizer.eos_token_id)
-                    offsets[1] += ASSISTANT_LENGTH
-                    offsets[-1] = len(ids)
-                i = 2
-                while i < len(inp_anses) -1 and offsets[-1] < MAX_SEQ_LENGTH:
-                    inp_ans=inp_anses[i:i+2]
-                    if len(inp_ans)==2:
-                        inp,ans=inp_ans
-                        prompt = PROMPT_USER.format(input=inp)
-                        ids.extend(tokenizer.encode(prompt)[1:])
-                        offsets.append(len(ids) + ASSISTANT_LENGTH)
-                        if offsets[-1] >= MAX_SEQ_LENGTH:
-                            break
-                        ads=tokenizer.encode(PROMPT_ASSISTANT.format(answer=ans))[1:]
-                        ids.extend(ads)
-                        ids.append(tokenizer.eos_token_id)
-                        offsets.append(len(ids))
-                        i += 2
-            pad = [tokenizer.pad_token_id]*(MAX_SEQ_LENGTH - offsets[-1])
-            ids = ids[:min(MAX_SEQ_LENGTH,offsets[-1])-1]
-            ids.append(tokenizer.eos_token_id)
-            ids.extend(pad)
-            input_ids = np.array(ids, dtype=np.int32)
-            labels = input_ids.copy()
-            for i in range(0,len(offsets)-1,2):
-                s,e=offsets[i:i+2]
-                if s<MAX_SEQ_LENGTH:
-                    labels[s:e] = IGNORE_TOKEN_ID
-            yield {"input_ids":input_ids,"labels":labels}
-
-   
+                divide.append(len(ids))
+                
+            if len(divide)>2 :
+                for qa_inputs in qa_inputs_generator(tokenizer,ids,divide,MAX_SEQ_LENGTH):
+                    yield qa_inputs
+ 
 def write_parquet(filename,output_dir,dtype,compression):
     #tokenizer = LlamaTokenizer.from_pretrained(args.tokenizer,fast_tokenizer=True)
     tokenizer = AutoTokenizer.from_pretrained(args.tokenizer,use_fast=False,trust_remote_code=True,add_bos_token = True)
@@ -158,7 +106,7 @@ def write_parquet(filename,output_dir,dtype,compression):
     batch_size = args.batch_size  # size of write batch
     keys = ["input_ids"]
     if dtype == 'qa':
-        token = partial(token_qa,use_special_token_id=not isinstance(tokenizer,LlamaTokenizer))
+        token = token_qa
         keys.append("labels")
     data_batch={k:[] for k in keys}
     item_iter = token(filename,tokenizer)
@@ -196,8 +144,8 @@ parser.add_argument('-i', type=str, default="data.txt")
 parser.add_argument('-o', type=str, default="")
 parser.add_argument('-n', type=int, default=2**23)
 parser.add_argument('-c', type=str, default="gzip",choices=('gzip','brotli','snappy','lz4','zstd'))
-parser.add_argument('--batch_size', type=int, default=2**15)
-parser.add_argument('--seq_len', type=int, default=2**11)
+parser.add_argument('--batch-size', type=int, default=2**15)
+parser.add_argument('--seq-len', type=int, default=2**11)
 parser.add_argument('--cores', type=int, default=-1)
 parser.add_argument('--tokenizer', type=str, default="openlm-research/open_llama_13b")
 parser.add_argument('--tmp', type=str, default="tmp")

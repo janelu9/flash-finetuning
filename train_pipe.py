@@ -28,9 +28,9 @@ from lora import (
     convert_linear_layer_to_lora,
     convert_lora_to_linear_layer,
     only_optimize_lora_parameters) 
-from models.baichuan.modeling_baichuan import BaichuanConfig
-from models.baichuan.pipeline_baichuan import BaichuanForCausalLMPipe,CrossEntropyLoss
-from models.llama.pipeline_llama import LlamaForCausalLMPipe,LlamaCrossEntropyLoss
+from model.baichuan.modeling_baichuan import BaichuanConfig
+from model.baichuan.pipeline_baichuan import BaichuanForCausalLMPipe,CrossEntropyLoss
+from model.llama.pipeline_llama import LlamaForCausalLMPipe,LlamaCrossEntropyLoss
 from torch.utils.data import DataLoader
 from deepspeed.utils import RepeatingLoader
 from deepspeed.ops.adam import DeepSpeedCPUAdam, FusedAdam
