@@ -28,7 +28,7 @@ num_partition=3
 deepseed train_zero.py
 ```
 
-### 3D Pipeline Parallelism
+### 3D Pipeline Parallelism (recommended)
 
 ```shell
 deepseed train_pipe.py
@@ -36,7 +36,7 @@ deepseed train_pipe.py
 
 #### Attentions
 
-If you want to switch to another model in the `models` folder,  modify these three places：
+If you want to switch to another model in the `model` folder,  modify these three places：
 
 **Tokenizer**
 
@@ -58,6 +58,8 @@ config = BaichuanConfig.from_pretrained(args.model_path)
 #train_pipe.py:
 model = BaichuanForCausalLMPipe(...
 ```
+
+Pipeline engine could load and save model's weights with Hugging Face's format directly. It could also load and resume from the checkpoint. If you want to resume interruption, any configs shouldn't be modified.
 
 ## Batch Inference
 
