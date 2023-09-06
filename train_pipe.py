@@ -212,25 +212,28 @@ def main():
     skiped_epoch = 0
     skiped_partition_id = 0
     skiped_step = -1
-    
-    if args.from_pretrained_checkpoint:
-        if engine.bfloat16_enabled():
-            engine._config.bfloat16_enabled = False
-            _,ckpt_config=engine.load_checkpoint(args.from_pretrained_checkpoint,load_module_only=True)
-            engine._config.bfloat16_enabled = True
-            engine.optimizer._restore_from_bit16_weights()
-        else:
-            _,ckpt_config=engine.load_checkpoint(args.from_pretrained_checkpoint,load_module_only=True)
-        skiped_epoch = ckpt_config["ds_config"].get("epoch",0)
-        skiped_partition_id = ckpt_config["ds_config"].get("partition_id",-1) + 1
 
-    if args.resume_dir:
-        _,ckpt_config=engine.load_checkpoint(args.resume_dir)
-        assert ds_config['train_batch_size'] == ckpt_config["ds_config"]["train_batch_size"]
-        skiped_epoch = ckpt_config["ds_config"]["epoch"]
-        skiped_partition_id = ckpt_config["ds_config"]["partition_id"]
-        skiped_step = ckpt_config["ds_config"]["step"]
-        checkpoint_memory.append(engine.global_steps)
+    if args.resume_dir or args.from_pretrained_checkpoint:
+        try:
+            assert args.resume_dir
+            _,ckpt_config=engine.load_checkpoint(args.resume_dir)
+            assert ds_config['train_batch_size'] == ckpt_config["ds_config"]["train_batch_size"]
+            skiped_epoch = ckpt_config["ds_config"]["epoch"]
+            skiped_partition_id = ckpt_config["ds_config"]["partition_id"]
+            skiped_step = ckpt_config["ds_config"]["step"]
+            checkpoint_memory.append(engine.global_steps)
+        except:
+            if not args.from_pretrained_checkpoint:args.from_pretrained_checkpoint = args.resume_dir
+            print_rank_0("only model weights are loaded.", args.global_rank)
+            if engine.bfloat16_enabled():
+                engine._config.bfloat16_enabled = False
+                _,ckpt_config=engine.load_checkpoint(args.from_pretrained_checkpoint,load_module_only=True)
+                engine._config.bfloat16_enabled = True
+                engine.optimizer._restore_from_bit16_weights()
+            else:
+                _,ckpt_config=engine.load_checkpoint(args.from_pretrained_checkpoint,load_module_only=True)
+            skiped_epoch = ckpt_config["ds_config"].get("epoch",0)
+            skiped_partition_id = ckpt_config["ds_config"].get("partition_id",-1) + 1         
         
     time_scale = 1.   
     accumulation_train_steps = engine.global_steps
