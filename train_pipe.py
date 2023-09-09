@@ -141,8 +141,7 @@ def main():
         'train_batch_size'] = args.per_device_train_batch_size*args.gradient_accumulation_steps*args.data_parallel_size
     ds_config['steps_per_print'] = args.steps_per_print
     set_random_seed(args.seed)
-    if args.checkpoint_dir and not os.path.exists(args.checkpoint_dir) and args.global_rank ==0 :
-        os.system(f"mkdir -p {args.checkpoint_dir}")
+    if args.checkpoint_dir and not os.path.exists(args.checkpoint_dir) and args.global_rank ==0 : os.system(f"mkdir -p {args.checkpoint_dir}")
     torch.distributed.barrier()
 
     config=LlamaConfig.from_pretrained(args.model_path)
@@ -160,8 +159,7 @@ def main():
         base_seed=args.seed,
         partition_method="type:DecoderLayer",
         )
-    
-    model.from_pretrained(args.model_path)
+    if not(args.resume_dir or args.from_pretrained_checkpoint): model.from_pretrained(args.model_path)
     
     if args.lora_dim > 0:
         model = convert_linear_layer_to_lora(
@@ -205,8 +203,7 @@ def main():
         lr_scheduler=lr_scheduler,
         )
 
-    if args.eval_data_dir:
-        eval_data_partitions = [os.path.join(args.eval_data_dir,f) for f in os.listdir(args.eval_data_dir) if os.path.isdir(os.path.join(args.eval_data_dir,f))]
+    if args.eval_data_dir: eval_data_partitions = [os.path.join(args.eval_data_dir,f) for f in os.listdir(args.eval_data_dir) if os.path.isdir(os.path.join(args.eval_data_dir,f))]
         
     checkpoint_memory = []
     skiped_epoch = 0
