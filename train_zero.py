@@ -8,7 +8,6 @@ import torch
 import deepspeed
 from ds_utils import (
     print_rank_0,
-    shuffle_rank_0,
     to_device,
     save_hf_format,
     set_random_seed,
@@ -16,7 +15,9 @@ from ds_utils import (
     get_optimizer_grouped_parameters,
     save_zero_three_model,
     load_hf_tokenizer,
-    get_train_ds_config,
+    get_train_ds_config)
+from data.utils import (
+    shuffle_rank_0,
     PromptDataset,
     PromptDataCollator)
 from transformers import (

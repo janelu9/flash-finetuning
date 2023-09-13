@@ -13,7 +13,6 @@ from transformers import (
     get_scheduler,)
 from ds_utils import (
     print_rank_0,
-    shuffle_rank_0,
     to_device,
     save_hf_format,
     set_random_seed,
@@ -21,9 +20,10 @@ from ds_utils import (
     get_optimizer_grouped_parameters,
     save_zero_three_model,
     load_hf_tokenizer,
-    get_train_ds_config,
-    PromptDataset,
-    PromptDataCollatorPipe)
+    get_train_ds_config,)
+from data.utils import (
+    shuffle_rank_0,
+    read_data)
 from lora import (
     convert_linear_layer_to_lora,
     convert_lora_to_linear_layer,
@@ -34,11 +34,10 @@ from model.llama.pipeline_llama import LlamaForCausalLMPipe,LlamaCrossEntropyLos
 from torch.utils.data import DataLoader
 from deepspeed.utils import RepeatingLoader
 from deepspeed.ops.adam import DeepSpeedCPUAdam, FusedAdam
-from deepspeed.runtime.pipe.topology import PipeModelDataParallelTopology
+from deepspeed.runtime.pipe import ProcessTopology
 from tqdm import tqdm
 import time
 import numpy as np
-import pyarrow.parquet
 import os
 import gc
 import argparse
@@ -145,10 +144,7 @@ def main():
     torch.distributed.barrier()
 
     config=LlamaConfig.from_pretrained(args.model_path)
-    topo = PipeModelDataParallelTopology(
-        num_pp = args.pipe_parallel_size,
-        num_mp = args.model_parallel_size,
-        num_dp = args.data_parallel_size)
+    topo = ProcessTopology(['data','model','pipe'], [args.data_parallel_size, args.model_parallel_size, args.pipe_parallel_size])
     args.seed = args.seed + topo.get_coord(args.global_rank).pipe
     model = LlamaForCausalLMPipe(
         config,
@@ -231,8 +227,7 @@ def main():
                 _,ckpt_config=engine.load_checkpoint(args.from_pretrained_checkpoint,load_module_only=True)
             skiped_epoch = ckpt_config["ds_config"].get("epoch",0)
             skiped_partition_id = ckpt_config["ds_config"].get("partition_id",-1) + 1         
-        
-    time_scale = 1.   
+          
     accumulation_train_steps = engine.global_steps
     print_rank_0(args, args.global_rank)
     for epoch in range(args.num_train_epochs):
@@ -240,21 +235,16 @@ def main():
         shuffle_rank_0(train_data_partitions,args.global_rank,epoch)
         for partition_id, train_data_partition in enumerate(train_data_partitions):
             if epoch == skiped_epoch and partition_id < skiped_partition_id:continue
-            try:
-                st = time.time()
-                train_data = pyarrow.parquet.read_table(train_data_partition)
-                read_train_time = min(10,(time.time() -st)*time_scale)
-                train_dataset = PromptDataset(
-                    {k:train_data[k].to_numpy().tolist() 
-                     for k in train_data.column_names})
-            except:
-                continue
+            # try:
+            train_dataset,DataCollator,read_train_time = read_data(args,train_data_partition)
+            # except:
+                # continue
             print_rank_0(
                 f"Beginning of Epoch {epoch+1}/{args.num_train_epochs}, Partition Rank: {partition_id+1}/{len(train_data_partitions)}, Partition Name: {train_data_partition}",
                 args.global_rank)
             train_dataloader = DataLoader(
                 train_dataset,
-                collate_fn=PromptDataCollatorPipe(),
+                collate_fn = DataCollator(),
                 num_workers = min(int(os.cpu_count()*0.8),args.gradient_accumulation_steps//2 + 1),
                 shuffle=True,
                 drop_last=False,
@@ -267,7 +257,7 @@ def main():
             if epoch == skiped_epoch and partition_id == skiped_partition_id :
                 if skiped_step == cur_train_bacth_steps -1:
                     print_rank_0(f"Wash the memory of train data clean for {read_train_time} seconds ......",args.global_rank)
-                    del train_iter; del train_loader; del train_dataloader; del train_dataset;del train_data
+                    del train_iter; del train_loader; del train_dataloader; del train_dataset
                     gc.collect()
                     [time.sleep(read_train_time/100) for _ in tqdm(range(100))]
                     continue
@@ -287,17 +277,12 @@ def main():
                     num_samples = 0
                     for eval_data_partition in eval_data_partitions:
                         try:
-                            st = time.time()
-                            eval_data = pyarrow.parquet.read_table(eval_data_partition)
-                            read_eval_time = min(10,(time.time() -st)*time_scale)
-                            eval_dataset = PromptDataset(
-                                {k:eval_data[k].to_numpy().tolist()
-                                for k in eval_data.column_names})
+                            eval_dataset,_,read_eval_time = read_data(args,eval_data_partition)
                         except:
                             continue
                         eval_dataloader = DataLoader(
                             eval_dataset,
-                            collate_fn=PromptDataCollatorPipe(),
+                            collate_fn = DataCollator(),
                             num_workers = min(int(os.cpu_count()*0.8),args.gradient_accumulation_steps//2 + 1),
                             shuffle=False,
                             drop_last=False,
@@ -311,7 +296,7 @@ def main():
                             eval_loss += loss
                         print_rank_0(f"Wash the memory of eval data clean for {read_eval_time} seconds ......",args.global_rank)
                         engine.set_dataiterator(None)
-                        del eval_iter;del eval_loader;del eval_dataloader;del eval_dataset;del eval_data
+                        del eval_iter;del eval_loader;del eval_dataloader;del eval_dataset
                         gc.collect()
                         [time.sleep(read_eval_time/100) for _ in tqdm(range(100))]
                     print_rank_0(f"************************ eval loss: {eval_loss/num_samples}************************ ",args.global_rank)
@@ -327,7 +312,7 @@ def main():
                     checkpoint_memory.append(steps)
             print_rank_0(f"Wash the memory of train data clean for {read_train_time} seconds ......",args.global_rank)
             engine.set_dataiterator(None)
-            del train_iter;del train_loader;del train_dataloader;del train_dataset;del train_data
+            del train_iter;del train_loader;del train_dataloader;del train_dataset
             gc.collect()
             [time.sleep(read_train_time/100) for _ in tqdm(range(100))]
             

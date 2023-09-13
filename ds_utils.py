@@ -108,24 +108,9 @@ def get_eval_ds_config(offload, stage=0):
         "wall_clock_breakdown": False
     }
 
-
 def print_rank_0(msg, rank=0):
     if rank <= 0:
         print(msg)
-
-def shuffle_rank_0(train_data_partitions, rank = 0, seed = 1234):
-    if rank == 0: 
-        num_partitions = len(train_data_partitions)
-        if num_partitions > 1:
-            files = sum([[(d,f) for f in os.listdir(d) if f[-8:] == '.parquet'] for d in train_data_partitions],[])
-            files.sort(key = lambda x:x[1])
-            np.random.seed(seed)
-            np.random.shuffle(files)
-            for i,(d,f) in enumerate(files):
-                target_dir = train_data_partitions[i%num_partitions]
-                if d != target_dir:
-                    os.system(f"mv {os.path.join(d,f)} {target_dir}/")
-    torch.distributed.barrier()
     
 def to_device(batch, device):
     output = {}
@@ -135,38 +120,6 @@ def to_device(batch, device):
         except:
             output[k] = v
     return output
-
-class PromptDataset(Dataset):
-
-    def __init__(self, prompt_dataset):
-        super().__init__()
-        self.prompt_input_ids = tuple(prompt_dataset['input_ids'])
-        self.prompt_labels = tuple(prompt_dataset['labels'])
-
-    def __len__(self):
-        return len(self.prompt_input_ids)
-
-    def __getitem__(self, idx):
-        return self.prompt_input_ids[idx],self.prompt_labels[idx]
-
-        
-class PromptDataCollatorPipe:
-
-    def __init__(self,pad_token_id = 0, IGNORE_TOKEN_ID = -100):
-        self.IGNORE_TOKEN_ID = IGNORE_TOKEN_ID
-        self.pad_token_id = pad_token_id
-        
-    def __call__(self, features):
-        input_ids = torch.tensor(np.stack([f[0] for f in features]),dtype=torch.long)
-        labels = torch.tensor(np.stack([f[1] for f in features]),dtype=torch.long)
-        labels[labels == self.pad_token_id ] = self.IGNORE_TOKEN_ID
-        return input_ids,labels
-     
-class PromptDataCollator(PromptDataCollatorPipe):
-
-    def __call__(self, features):
-        input_ids,labels = super(). __call__(features)
-        return {'input_ids':input_ids,'labels':labels}
 
 class MovingAverage:
 

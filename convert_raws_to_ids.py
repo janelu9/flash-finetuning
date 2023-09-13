@@ -3,7 +3,7 @@
 
 from functools import partial
 from transformers import AutoTokenizer,LlamaTokenizer
-from data.qa_utils import qa_inputs_generator
+from data.utils import qa_inputs_generator
 from concurrent.futures import ThreadPoolExecutor,ProcessPoolExecutor
 import pyarrow.parquet
 import numpy as np
