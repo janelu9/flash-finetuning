@@ -92,8 +92,8 @@ parser.add_argument('--only_optimize_lora',
 parser = deepspeed.add_config_arguments(parser)
 
 args=parser.parse_args()
-args.model_path = "openlm-research/open_llama_13b"
-args.train_data_dir = "news-commentary-v13-zh-en_open_llama_13b"
+args.model_path = "Baichuan_13B_Chat"
+args.train_data_dir = "news-commentary-v13-zh-en_Baichuan_13B_Chat"
 args.eval_data_dir = ""
 args.checkpoint_dir = "check"
 args.from_pretrained_checkpoint = ""
@@ -101,7 +101,7 @@ args.resume_dir = ""
 args.steps_per_checkpoint = -1
 args.zero_stage=0
 args.num_train_epochs=1
-args.per_device_train_batch_size = 2
+args.per_device_train_batch_size = 1
 args.gradient_accumulation_steps = 2
 args.seed=1234
 args.weight_decay=0.01
@@ -143,10 +143,10 @@ def main():
     if args.checkpoint_dir and not os.path.exists(args.checkpoint_dir) and args.global_rank ==0 : os.system(f"mkdir -p {args.checkpoint_dir}")
     torch.distributed.barrier()
 
-    config=LlamaConfig.from_pretrained(args.model_path)
+    config=BaichuanConfig.from_pretrained(args.model_path)
     topo = ProcessTopology(['data','model','pipe'], [args.data_parallel_size, args.model_parallel_size, args.pipe_parallel_size])
     args.seed = args.seed + topo.get_coord(args.global_rank).pipe
-    model = LlamaForCausalLMPipe(
+    model = BaichuanForCausalLMPipe(
         config,
         args.gradient_checkpointing,
         args.fast,
