@@ -4,21 +4,19 @@ Running Large Language Model easily and faster.
 
 ## Data Conversion
 
-Convert the raw data to token ids stored in parquet format.
+Convert the raw data to token ids stored in parquet file.
 
 ```shell
 python convert_raws_to_ids.py -i news-commentary-v13-zh-en.txt
 ```
 
-Do a repartition(optional but recommended).  The fewer partitions, the better shuffle, but the larger memory requirement during training. Setting `num_partition` according to the memory of each worker and the persistence of your cluster.
+Do a repartition(optional but recommended).  The fewer partitions, the better shuffle, but the larger memory requirement during training. 1B token ids in parquet take up to 2G of hard drive at most but require approximately 35G of memory. Setting `num_partition` according to the memory of each worker.
 
 ```shell
 parquet_data_dir=news-commentary-v13-zh-en_open_llama_13b
 num_partition=3
 ./repartition.sh $parquet_data_dir $num_partition
 ```
-
-
 
 ## Model Training
 
@@ -59,7 +57,7 @@ config = BaichuanConfig.from_pretrained(args.model_path)
 model = BaichuanForCausalLMPipe(...
 ```
 
-Pipeline engine could load and save model's weights with Hugging Face's format directly. It could also load and resume from the checkpoint. If you want to resume interruption, any configs shouldn't be modified.
+Generally, every GPU device reads one piece of data, that means one worker with 8 GPUs will need to allocate a total of 8x data size on its CPU memory.  But now it need only 1x size if these GPUs belong to one pipeline in my project with special optimization. So I recommend you to train model with faster and low-cost pipeline parallelism rather than ZERO if your data are really big. Pipeline engine could load and save model's weights with HuggingFace's format directly here. It could also resume from the checkpoint, if you want to resume interruption, any configs shouldn't be modified.
 
 ## Batch Inference
 

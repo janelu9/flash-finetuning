@@ -249,15 +249,14 @@ def main():
                 shuffle=True,
                 drop_last=False,
                 batch_size=args.per_device_train_batch_size)
-            train_loader = RepeatingLoader(train_dataloader)
-            train_iter = iter(train_loader)
+            train_iter = iter(RepeatingLoader(train_dataloader))
             cur_num_train_bacth = int(np.ceil(len(train_dataloader)/args.data_parallel_size))
             start_step = 0 
             cur_train_bacth_steps = int(np.ceil(cur_num_train_bacth/args.gradient_accumulation_steps))
             if epoch == skiped_epoch and partition_id == skiped_partition_id :
                 if skiped_step == cur_train_bacth_steps -1:
                     print_rank_0(f"Wash the memory of train data clean for {read_train_time} seconds ......",args.global_rank)
-                    del train_iter; del train_loader; del train_dataloader; del train_dataset
+                    del train_iter; del train_dataloader; del train_dataset
                     gc.collect()
                     [time.sleep(read_train_time/100) for _ in tqdm(range(100))]
                     continue
@@ -287,8 +286,7 @@ def main():
                             shuffle=False,
                             drop_last=False,
                             batch_size=args.per_device_train_batch_size)
-                        eval_loader = RepeatingLoader(eval_dataloader)
-                        eval_iter = iter(eval_loader)
+                        eval_iter = iter(RepeatingLoader(eval_dataloader))
                         cur_eval_bacth_steps = int(np.ceil(len(eval_dataloader)/args.data_parallel_size/args.gradient_accumulation_steps))
                         for eval_step in range(cur_eval_bacth_steps):
                             loss = engine.eval_batch(data_iter = eval_iter)
@@ -296,7 +294,7 @@ def main():
                             eval_loss += loss
                         print_rank_0(f"Wash the memory of eval data clean for {read_eval_time} seconds ......",args.global_rank)
                         engine.set_dataiterator(None)
-                        del eval_iter;del eval_loader;del eval_dataloader;del eval_dataset
+                        del eval_iter;del eval_dataloader;del eval_dataset
                         gc.collect()
                         [time.sleep(read_eval_time/100) for _ in tqdm(range(100))]
                     print_rank_0(f"************************ eval loss: {eval_loss/num_samples}************************ ",args.global_rank)
@@ -312,7 +310,7 @@ def main():
                     checkpoint_memory.append(steps)
             print_rank_0(f"Wash the memory of train data clean for {read_train_time} seconds ......",args.global_rank)
             engine.set_dataiterator(None)
-            del train_iter;del train_loader;del train_dataloader;del train_dataset
+            del train_iter;del train_dataloader;del train_dataset
             gc.collect()
             [time.sleep(read_train_time/100) for _ in tqdm(range(100))]
             
