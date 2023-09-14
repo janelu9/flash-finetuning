@@ -235,10 +235,10 @@ def main():
         shuffle_rank_0(train_data_partitions,args.global_rank,epoch)
         for partition_id, train_data_partition in enumerate(train_data_partitions):
             if epoch == skiped_epoch and partition_id < skiped_partition_id:continue
-            # try:
-            train_dataset,DataCollator,read_train_time = read_data(args,train_data_partition)
-            # except:
-                # continue
+            try:
+                train_dataset,DataCollator,read_train_time = read_data(args,train_data_partition)
+            except:
+                continue
             print_rank_0(
                 f"Beginning of Epoch {epoch+1}/{args.num_train_epochs}, Partition Rank: {partition_id+1}/{len(train_data_partitions)}, Partition Name: {train_data_partition}",
                 args.global_rank)
