@@ -239,9 +239,6 @@ def main():
                 train_dataset,DataCollator,read_train_time = read_data(args,train_data_partition)
             except:
                 continue
-            print_rank_0(
-                f"Beginning of Epoch {epoch+1}/{args.num_train_epochs}, Partition Rank: {partition_id+1}/{len(train_data_partitions)}, Partition Name: {train_data_partition}",
-                args.global_rank)
             train_dataloader = DataLoader(
                 train_dataset,
                 collate_fn = DataCollator(),
@@ -265,7 +262,8 @@ def main():
                     next(train_iter)
             accumulation_train_steps += cur_train_bacth_steps - start_step
             print_rank_0(
-                f"Total Partition Steps: {accumulation_train_steps}/{num_training_steps}.",
+                f"Beginning of Epoch: {epoch+1}/{args.num_train_epochs}\nPartition Rank: {partition_id+1}/{len(train_data_partitions)}\nPartition Name: {train_data_partition}\n"+
+                f"Total Partition Steps: {accumulation_train_steps}/{num_training_steps}",
                 args.global_rank)
             for step in range(start_step,cur_train_bacth_steps):
                 loss = engine.train_batch(data_iter=train_iter)

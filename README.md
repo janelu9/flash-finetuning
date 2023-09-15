@@ -1,16 +1,16 @@
 # EasyLLM
 
-Running Large Language Model easily and faster.
+Running Large Language Model easily, faster and low-cost.
 
 ## Data Conversion
 
-Convert the raw data to token ids stored in parquet file.
+Convert the raw data to token ids stored in parquet files.
 
 ```shell
 python convert_raws_to_ids.py -i news-commentary-v13-zh-en.txt
 ```
 
-Do a repartition(optional but recommended).  The fewer partitions, the better shuffle, but the larger memory requirement during training. 1B token ids in parquet take up to 2G of hard drive at most but require approximately 35G of memory. Setting `num_partition` according to the memory of each worker.
+Do a repartition(optional but recommended).  The fewer partitions, the better shuffle, but the larger CPU memory requirement during training. 1B token ids in parquet files take up to 2G of hard disk at most but require approximately 10G of CPU memory. Setting `num_partition` according to the CPU memory of each worker.
 
 ```shell
 parquet_data_dir=news-commentary-v13-zh-en_open_llama_13b
@@ -57,7 +57,7 @@ config = BaichuanConfig.from_pretrained(args.model_path)
 model = BaichuanForCausalLMPipe(...
 ```
 
-Generally, every GPU device reads one piece of data, that means one worker with 8 GPUs will need to allocate a total of 8x data size on its CPU memory.  But now it need only 1x size if these GPUs belong to one pipeline in my project with special optimization. So I recommend you to train model with faster and low-cost pipeline parallelism rather than ZERO if your data are really big. Pipeline engine could load and save model's weights with HuggingFace's format directly here. It could also resume from the checkpoint, if you want to resume interruption, any configs shouldn't be modified.
+Generally, every GPU device reads one piece of data, that means one worker with 8 GPUs will need to allocate a total of 8x data size on its CPU memory.  But now they need just 1x if these GPUs belong to one pipeline under my special optimizations in this project . So I strongly recommend you to train your model with faster and low-cost Pipeline Parallelism rather than ZERO if your data are really big. Pipeline engine could directly load and save model's weights in HuggingFace's format here. It could also resumes from the checkpoint. If you want to resume interruption, any configs shouldn't be modified.
 
 ## Batch Inference
 
@@ -101,4 +101,4 @@ If you find EasyLLM useful or use EasyLLM  code  in your research, please cite i
 
 ## Acknowledgment
 
-This repository benefits from [LLaMA](https://ai.facebook.com/blog/large-language-model-llama-meta-ai), [DeepSpeed](https://github.com/microsoft/DeepSpeed), [DeepSpeed-Chat](https://github.com/microsoft/DeepSpeedExamples/tree/HEAD/applications/DeepSpeed-Chat), [Flash-Attention](https://github.com/Dao-AILab/flash-attention.git) and [vLLM](https://github.com/vllm-project/vllm).
+This repository benefits from [DeepSpeed](https://github.com/microsoft/DeepSpeed), [Flash-Attention](https://github.com/Dao-AILab/flash-attention.git), [xFormers](https://github.com/facebookresearch/xformers) and [vLLM](https://github.com/vllm-project/vllm).
