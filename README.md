@@ -57,7 +57,7 @@ config = BaichuanConfig.from_pretrained(args.model_path)
 model = BaichuanForCausalLMPipe(...
 ```
 
-Generally, every GPU device reads one piece of data, that means one worker with 8 GPUs will need to allocate a total of 8x data size on its CPU memory.  But now they need just 1x if these GPUs belong to one pipeline under my special optimizations in this project . So I strongly recommend you to train your model with faster and low-cost Pipeline Parallelism rather than ZERO if your data are really big. Pipeline engine could directly load and save model's weights in HuggingFace's format here. It could also resumes from the checkpoint. If you want to resume interruption, any configs shouldn't be modified.
+Generally, every GPU process reads one piece of data, that means one worker with 8 GPUs will need to allocate a total of 8x CPU memory for data.  But now they need just 1x if these GPUs belong to one pipeline under my special optimizations in this project . So I strongly recommend you to train your model with faster and low-cost Pipeline Parallelism rather than ZERO if your data are really big. Pipeline engine could directly load and save model's weights in HuggingFace's format. It could also resume from the checkpoint. If you want to resume interruption, any configs related to training shouldn't be modified, otherwise it may load model's parameters only.
 
 ## Batch Inference
 
@@ -91,7 +91,7 @@ If you find EasyLLM useful or use EasyLLM  code  in your research, please cite i
 ```bibtex
 @misc{EasyLLM,
   author       = {Jian Lu},
-  title        = {EasyLLM: Running Large Language Model easily and faster},
+  title        = {EasyLLM: Running Large Language Model easily, faster and low-cost.},
   year         = {2023},
   publisher    = {GitHub},
   journal      = {GitHub repository},
