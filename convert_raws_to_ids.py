@@ -1,10 +1,13 @@
 #!/usr/bin/env python
 # coding: utf-8
+# Created on Thur Jun 29 09:36:49 2023
+# @author: Lu Jian
+# Email:janelu@live.cn;
 
 from functools import partial
 from transformers import AutoTokenizer,LlamaTokenizer
-from data.utils import qa_inputs_generator
 from concurrent.futures import ThreadPoolExecutor,ProcessPoolExecutor
+from data.utils import qa_inputs_generator
 import pyarrow.parquet
 import numpy as np
 import argparse
@@ -13,17 +16,9 @@ import re
 import os
 import gc
 
-PROMPT_BEGIN: str = 'BEGINNING OF CONVERSATION: '
-PROMPT_USER: str = 'USER: {input} '
-PROMPT_ASSISTANT: str = 'ASSISTANT: {answer}'  # should not have a space at the end
-PROMPT_INPUT: str = PROMPT_BEGIN + PROMPT_USER
-USER_TOKEN_ID = 195
-ASSISTANT_TOKEN_ID = 196
 IGNORE_TOKEN_ID: int = -100
-MAX_SEQ_LENGTH: int  = 2048
 OVERLAPPING_LENGTH: int  = 128
 FILTER_LENGTH: int  = 256
-ROLE = {'user':[USER_TOKEN_ID],'assistant':[ASSISTANT_TOKEN_ID]}
 PATTERN: str = "请将下文翻译为英文：{inp}"
 
 def clean_wikitext(string):
@@ -48,7 +43,8 @@ def wiki_generator(file,sep="\n\n"):
             
 def token_wiki(file,tokenizer):
     for doc in wiki_generator(file):
-        ids=tokenizer.encode(doc)
+        ids = [tokenizer.bos_token_id]
+        ids.extend(tokenizer.encode(doc))
         ids.append(tokenizer.eos_token_id)
         p=0
         n = len(ids)
@@ -67,23 +63,27 @@ def qa_generator(file):
             yield line
             line = f.readline()
 
-def token_qa(file,tokenizer):
+def token_qa(file,tokenizer,ROLE = {},PREFIX = []):
     for sample in qa_generator(file):
         inp_anses = sample.strip().split("\t") # example data format: Input\tAnswer, modify by your will.
         if len(inp_anses) > 1:
-            msgs = [{"user":PATTERN.format(inp=content)} if i%2 == 0 else {"assistant":content} for i,content in enumerate(inp_anses)]
-            ids=[];divide=[0];pre_k = "assistant"
+            msgs = PREFIX + [{"user":PATTERN.format(inp=content)} if i%2 == 0 else {"assistant":content} for i,content in enumerate(inp_anses)]
+            ids = []; divide = []; pre_k = "assistant"
             for msg in msgs:
                 k,v = next(iter(msg.items()))
                 if k != pre_k:
-                    if ids:
-                        divide.append(len(ids)+1)
-                        if k != "assistant":
-                            ids.append(tokenizer.eos_token_id) 
-                    ids.extend(ROLE[k])
-                    ids.extend(tokenizer.encode(v)[1:])
+                    if k != "assistant":
+                        if ids:
+                            ids.append(tokenizer.eos_token_id)
+                        if pre_k != "system":
+                            divide.append(len(ids))
+                        ids.extend(ROLE[k])
+                    else:
+                        ids.extend(ROLE[k])
+                        divide.append(len(ids))
+                    ids.extend(tokenizer.encode(v))         
                 elif ids:
-                    ids.extend(tokenizer.encode(v)[1:])
+                    ids.extend(tokenizer.encode(v))
                 pre_k = k
                 
             if k == "assistant":
@@ -95,18 +95,48 @@ def token_qa(file,tokenizer):
                 divide.append(len(ids))
                 
             if len(divide)>2 :
-                for qa_inputs in qa_inputs_generator(tokenizer,ids,divide,MAX_SEQ_LENGTH):
+                for qa_inputs in qa_inputs_generator(ids,
+                                                     divide,
+                                                     MAX_SEQ_LENGTH,
+                                                     MAX_HISTORY_LENGTH = MAX_SEQ_LENGTH//2,
+                                                     pad_token_id = tokenizer.pad_token_id,
+                                                     IGNORE_TOKEN_ID = -100):
                     yield qa_inputs
- 
+   
 def write_parquet(filename,output_dir,dtype,compression):
-    #tokenizer = LlamaTokenizer.from_pretrained(args.tokenizer,fast_tokenizer=True)
-    tokenizer = AutoTokenizer.from_pretrained(args.tokenizer,use_fast=False,trust_remote_code=True,add_bos_token = True)
+    #tokenizer = LlamaTokenizer.from_pretrained(args.tokenizer,fast_tokenizer=True,add_bos_token = False))
+    tokenizer = AutoTokenizer.from_pretrained(args.tokenizer,use_fast=False,trust_remote_code=True,add_bos_token = False)
     tokenizer.pad_token_id=0
+    tokenizer_class = tokenizer.__class__.__name__ 
+    PREFIX = []
+    if tokenizer_class == "BaichuanTokenizer":
+    
+        ROLE = {
+            'user':[195],
+            'assistant':[196]
+        }
+
+    elif tokenizer_class == "QWenTokenizer":
+        tokenizer.pad_token_id = tokenizer.encode("<|endoftext|>")[0]
+        tokenizer.bos_token_id = tokenizer.im_start_id
+        tokenizer.eos_token_id = tokenizer.im_end_id
+        nl_token_id = tokenizer.encode("\n")
+        system_id = tokenizer.encode("system", allowed_special=set())
+        user_id = tokenizer.encode("user", allowed_special=set())
+        assistant_id = tokenizer.encode("assistant", allowed_special=set())
+        
+        ROLE = {
+            'system': [tokenizer.bos_token_id] + system_id + nl_token_id,
+            'user': nl_token_id + [tokenizer.bos_token_id] + user_id + nl_token_id,
+            'assistant': [tokenizer.eos_token_id] + nl_token_id + [tokenizer.bos_token_id] + assistant_id + nl_token_id
+        }
+        
+        PREFIX = [{"system":""}]
+        
     token = token_wiki
-    batch_size = args.batch_size  # size of write batch
     keys = ["input_ids"]
     if dtype == 'qa':
-        token = token_qa
+        token = partial(token_qa,ROLE = ROLE, PREFIX = PREFIX)
         keys.append("labels")
     data_batch={k:[] for k in keys}
     item_iter = token(filename,tokenizer)
@@ -119,6 +149,7 @@ def write_parquet(filename,output_dir,dtype,compression):
         return
     if not os.path.exists(out_dir):
         os.makedirs(out_dir)
+    batch_size = args.batch_size  
     for i,data in tqdm.tqdm(enumerate(item_iter)):
         for k in data_batch:
             data_batch[k].append(data[k])
@@ -144,7 +175,7 @@ parser.add_argument('-i', type=str, default="data.txt")
 parser.add_argument('-o', type=str, default="")
 parser.add_argument('-n', type=int, default=2**23)
 parser.add_argument('-c', type=str, default="gzip",choices=('gzip','brotli','snappy','lz4','zstd'))
-parser.add_argument('--batch-size', type=int, default=2**15)
+parser.add_argument('--batch_size', type=int, default=2**15)
 parser.add_argument('--seq-len', type=int, default=2**11)
 parser.add_argument('--cores', type=int, default=-1)
 parser.add_argument('--tokenizer', type=str, default="openlm-research/open_llama_13b")

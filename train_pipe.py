@@ -29,7 +29,9 @@ from lora import (
     convert_lora_to_linear_layer,
     only_optimize_lora_parameters) 
 from model.baichuan.modeling_baichuan import BaichuanConfig
-from model.baichuan.pipeline_baichuan import BaichuanForCausalLMPipe,CrossEntropyLoss
+from model.baichuan.pipeline_baichuan import BaichuanForCausalLMPipe,BaichuanCrossEntropyLoss
+from model.qwen.modeling_qwen import QWenConfig
+from model.qwen.pipeline_qwen import QWenForCausalLMPipe,QWenCrossEntropyLoss
 from model.llama.pipeline_llama import LlamaForCausalLMPipe,LlamaCrossEntropyLoss
 from torch.utils.data import DataLoader
 from deepspeed.utils import RepeatingLoader
@@ -92,8 +94,8 @@ parser.add_argument('--only_optimize_lora',
 parser = deepspeed.add_config_arguments(parser)
 
 args=parser.parse_args()
-args.model_path = "Baichuan_13B_Chat"
-args.train_data_dir = "news-commentary-v13-zh-en_Baichuan_13B_Chat"
+args.model_path = "../Qwen_7B_Chat"
+args.train_data_dir = "../news-commentary-v13-zh-en_Qwen_7B_Chat"
 args.eval_data_dir = ""
 args.checkpoint_dir = "check"
 args.from_pretrained_checkpoint = ""
@@ -143,14 +145,14 @@ def main():
     if args.checkpoint_dir and not os.path.exists(args.checkpoint_dir) and args.global_rank ==0 : os.system(f"mkdir -p {args.checkpoint_dir}")
     torch.distributed.barrier()
 
-    config=BaichuanConfig.from_pretrained(args.model_path)
+    config = QWenConfig.from_pretrained(args.model_path)
     topo = ProcessTopology(['data','model','pipe'], [args.data_parallel_size, args.model_parallel_size, args.pipe_parallel_size])
     args.seed = args.seed + topo.get_coord(args.global_rank).pipe
-    model = BaichuanForCausalLMPipe(
+    model = QWenForCausalLMPipe(
         config,
         args.gradient_checkpointing,
         args.fast,
-        loss_fn=CrossEntropyLoss(),
+        loss_fn=QWenCrossEntropyLoss(),
         topology=topo,
         base_seed=args.seed,
         partition_method="type:DecoderLayer",
@@ -236,12 +238,12 @@ def main():
         for partition_id, train_data_partition in enumerate(train_data_partitions):
             if epoch == skiped_epoch and partition_id < skiped_partition_id:continue
             try:
-                train_dataset,DataCollator,read_train_time = read_data(args,train_data_partition)
+                train_dataset,DataCollator,read_train_time = read_data(args,train_data_partition) 
             except:
                 continue
             train_dataloader = DataLoader(
                 train_dataset,
-                collate_fn = DataCollator(),
+                collate_fn = DataCollator(pad_token_id = config.pad_token_id),
                 num_workers = min(int(os.cpu_count()*0.8),args.gradient_accumulation_steps//2 + 1),
                 shuffle=True,
                 drop_last=False,
