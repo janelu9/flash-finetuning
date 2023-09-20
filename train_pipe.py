@@ -281,7 +281,7 @@ def main():
                             continue
                         eval_dataloader = DataLoader(
                             eval_dataset,
-                            collate_fn = DataCollator(),
+                            collate_fn = DataCollator(pad_token_id = config.pad_token_id),
                             num_workers = min(int(os.cpu_count()*0.8),args.gradient_accumulation_steps//2 + 1),
                             shuffle=False,
                             drop_last=False,
@@ -297,7 +297,7 @@ def main():
                         del eval_iter;del eval_dataloader;del eval_dataset
                         gc.collect()
                         [time.sleep(read_eval_time/100) for _ in tqdm(range(100))]
-                    print_rank_0(f"************************ eval loss: {eval_loss/num_samples}************************ ",args.global_rank)
+                    print_rank_0(f"************************ eval loss: {eval_loss.item()/num_samples}************************ ",args.global_rank)
                     engine.train()
                 if args.checkpoint_dir and ((args.steps_per_checkpoint>0 and steps % args.steps_per_checkpoint == 0) or steps == accumulation_train_steps):
                     if args.max_num_checkpoints > 0 and args.max_num_checkpoints == len(checkpoint_memory):
