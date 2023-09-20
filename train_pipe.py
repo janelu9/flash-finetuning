@@ -94,8 +94,8 @@ parser.add_argument('--only_optimize_lora',
 parser = deepspeed.add_config_arguments(parser)
 
 args=parser.parse_args()
-args.model_path = "../Qwen_7B_Chat"
-args.train_data_dir = "../news-commentary-v13-zh-en_Qwen_7B_Chat"
+args.model_path = "Qwen_7B_Chat"
+args.train_data_dir = "news-commentary-v13-zh-en_Qwen_7B_Chat"
 args.eval_data_dir = ""
 args.checkpoint_dir = "check"
 args.from_pretrained_checkpoint = ""
@@ -270,7 +270,7 @@ def main():
             for step in range(start_step,cur_train_bacth_steps):
                 loss = engine.train_batch(data_iter=train_iter)
                 steps = engine.global_steps
-                if args.eval_data_dir and steps % args.steps_per_eval == 0:
+                if args.eval_data_dir and ((args.steps_per_eval>0 and steps % args.steps_per_checkpoint == 0) or steps == accumulation_train_steps):
                     engine.eval()
                     eval_loss = 0
                     num_samples = 0

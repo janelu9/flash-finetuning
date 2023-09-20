@@ -77,9 +77,8 @@ def token_qa(file,tokenizer,ROLE = {},PREFIX = []):
                             ids.append(tokenizer.eos_token_id)
                         if pre_k != "system":
                             divide.append(len(ids))
-                        ids.extend(ROLE[k])
-                    else:
-                        ids.extend(ROLE[k])
+                    ids.extend(ROLE[k])
+                    if k == "assistant":
                         divide.append(len(ids))
                     ids.extend(tokenizer.encode(v))         
                 elif ids:
