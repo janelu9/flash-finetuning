@@ -65,9 +65,9 @@ Generally, every GPU process reads one piece of data, that means one worker with
 | :----------: | :-------------: | :-----------------------: |
 |  llama-13b   |        8        |         82391.04          |
 | baichuan-13b |        8        |         67174.40          |
-|   qwen-7b    |        4        |         119799.81         |
+|   qwen-7b    |        4        |         122033.10         |
 
-**Note**: The training speed of each model was measured on 64 NVIDIA A100-PCIE-40GB GPUs with data type of bfloat16 and batch token size of 4M(`batch_size*seq_len`).
+**Note**: The training speed of each model was measured on 64 NVIDIA A100-PCIE-40GB GPUs with data type of bfloat16 and batch token size of 4M(`batch_size*seq_length`).
 
 ## Batch Inference
 
