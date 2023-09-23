@@ -7,7 +7,7 @@
 import torch
 import deepspeed
 from transformers import (
-    LlamaConfig,
+    AutoConfig,
     SchedulerType,
     default_data_collator,
     get_scheduler,)
@@ -28,11 +28,10 @@ from lora import (
     convert_linear_layer_to_lora,
     convert_lora_to_linear_layer,
     only_optimize_lora_parameters) 
-from model.baichuan.modeling_baichuan import BaichuanConfig
-from model.baichuan.pipeline_baichuan import BaichuanForCausalLMPipe,BaichuanCrossEntropyLoss
-from model.qwen.modeling_qwen import QWenConfig
-from model.qwen.pipeline_qwen import QWenForCausalLMPipe,QWenCrossEntropyLoss
-from model.llama.pipeline_llama import LlamaForCausalLMPipe,LlamaCrossEntropyLoss
+from model import (
+    ModelPipe,
+    CrossEntropyLossPipe
+    )
 from torch.utils.data import DataLoader
 from deepspeed.utils import RepeatingLoader
 from deepspeed.ops.adam import DeepSpeedCPUAdam, FusedAdam
@@ -48,6 +47,14 @@ parser = argparse.ArgumentParser(description='My training script.')
 parser.add_argument('--local_rank', type=int, default=-1,
                     help='local rank passed from distributed launcher')        
 # Include DeepSpeed configuration arguments
+parser.add_argument("--model",
+                    type=str,
+                    default= "baichuan-inc/Baichuan-13B-Chat",
+                    help="huggingface's model path")
+parser.add_argument("--train-data-dir",
+                    type=str,
+                    default= "news-commentary-v13-zh-en_Baichuan-13B-Chat",
+                    help="data dir for training")                       
 parser.add_argument('--offload',
                     action='store_true',
                     help='Enable ZeRO Offload techniques.')         
@@ -94,8 +101,6 @@ parser.add_argument('--only_optimize_lora',
 parser = deepspeed.add_config_arguments(parser)
 
 args=parser.parse_args()
-args.model_path = "Qwen_7B_Chat"
-args.train_data_dir = "news-commentary-v13-zh-en_Qwen_7B_Chat"
 args.eval_data_dir = ""
 args.checkpoint_dir = "check"
 args.from_pretrained_checkpoint = ""
@@ -145,19 +150,19 @@ def main():
     if args.checkpoint_dir and not os.path.exists(args.checkpoint_dir) and args.global_rank ==0 : os.system(f"mkdir -p {args.checkpoint_dir}")
     torch.distributed.barrier()
 
-    config = QWenConfig.from_pretrained(args.model_path)
+    config = AutoConfig.from_pretrained(args.model,trust_remote_code=True)
     topo = ProcessTopology(['data','model','pipe'], [args.data_parallel_size, args.model_parallel_size, args.pipe_parallel_size])
     args.seed = args.seed + topo.get_coord(args.global_rank).pipe
-    model = QWenForCausalLMPipe(
+    model = ModelPipe[config.model_type](
         config,
         args.gradient_checkpointing,
         args.fast,
-        loss_fn=QWenCrossEntropyLoss(),
+        loss_fn=CrossEntropyLossPipe[config.model_type](),
         topology=topo,
         base_seed=args.seed,
         partition_method="type:DecoderLayer",
         )
-    if not(args.resume_dir or args.from_pretrained_checkpoint): model.from_pretrained(args.model_path)
+    if not(args.resume_dir or args.from_pretrained_checkpoint): model.from_pretrained(args.model)
     
     if args.lora_dim > 0:
         model = convert_linear_layer_to_lora(
