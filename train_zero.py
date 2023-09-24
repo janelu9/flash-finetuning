@@ -56,7 +56,7 @@ parser.add_argument("--train-data",
 parser.add_argument('--offload',
                     action='store_true',
                     help='Enable ZeRO Offload techniques.')         
-parser.add_argument('--max_len',
+parser.add_argument('--seq_length',
                     type=int,
                     default=2048,
                     help='max seq len')
@@ -136,7 +136,7 @@ def main():
     if os.path.isfile(args.train_data):
         from convert_raw_to_ids import write_parquet
         cached_dir = os.path.splitext(os.path.basename(args.train_data))[0] + f"_{os.path.basename(args.model)}"
-        write_parquet(args.train_data,cached_dir,args.model,MAX_SEQ_LENGTH=2048)
+        write_parquet(args.train_data,cached_dir,args.model,MAX_SEQ_LENGTH=args.seq_length)
         args.train_data = cached_dir
     train_data_partitions = [os.path.join(args.train_data,f) for f in os.listdir(args.train_data) if os.path.isdir(os.path.join(args.train_data,f))]
     

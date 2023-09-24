@@ -58,7 +58,7 @@ parser.add_argument("--train-data",
 parser.add_argument('--offload',
                     action='store_true',
                     help='Enable ZeRO Offload techniques.')         
-parser.add_argument('--max_len',
+parser.add_argument('--seq_length',
                     type=int,
                     default=2048,
                     help='max seq len')
@@ -109,14 +109,14 @@ args.steps_per_checkpoint = -1
 args.zero_stage=0
 args.num_train_epochs=1
 args.per_device_train_batch_size = 1
-args.gradient_accumulation_steps = 32
+args.gradient_accumulation_steps = 2
 args.seed=1234
 args.weight_decay=0.01
 args.lr_scheduler_type="cosine"
 args.num_warmup_steps=100
 args.learning_rate=3e-4
 args.output_dir = "./output"
-args.pipe_parallel_size = 8
+args.pipe_parallel_size = 1
 args.model_parallel_size = 1
 args.gradient_checkpointing = not args.only_optimize_lora
 try:
@@ -187,7 +187,7 @@ def main():
     if os.path.isfile(args.train_data):
         from convert_raw_to_ids import write_parquet
         cached_dir = os.path.splitext(os.path.basename(args.train_data))[0] + f"_{os.path.basename(args.model)}"
-        write_parquet(args.train_data,cached_dir,args.model,MAX_SEQ_LENGTH=2048)
+        write_parquet(args.train_data,cached_dir,args.model,MAX_SEQ_LENGTH=args.seq_length)
         args.train_data = cached_dir
     train_data_partitions = [os.path.join(args.train_data,f) for f in os.listdir(args.train_data) if os.path.isdir(os.path.join(args.train_data,f))]
     
@@ -215,7 +215,7 @@ def main():
         if os.path.isfile(args.eval_data):
             from convert_raw_to_ids import write_parquet
             cached_dir = os.path.splitext(os.path.basename(args.eval_data))[0] + f"_{os.path.basename(args.model)}"
-            write_parquet(args.eval_data,cached_dir,args.model,MAX_SEQ_LENGTH=2048)
+            write_parquet(args.eval_data,cached_dir,args.model,MAX_SEQ_LENGTH=args.seq_length)
             args.eval_data = cached_dir
         eval_data_partitions = [os.path.join(args.eval_data,f) for f in os.listdir(args.eval_data) if os.path.isdir(os.path.join(args.eval_data,f))]
         

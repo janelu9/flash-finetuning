@@ -35,12 +35,12 @@ deepseed train_zero.py \
     --train-data news-commentary-v13-zh-en.txt
 ```
 
-### 3D Pipeline Parallelism
+### Pipeline Parallelism
 
 ```shell
 deepseed train_pipe.py \
     --model baichuan-inc/Baichuan-13B-Chat \
-    --train-data news-commentary-v13-zh-en.txt # news-commentary-v13-zh-en_Baichuan-13B-Chat
+    --train-data news-commentary-v13-zh-en_Baichuan-13B-Chat
 ```
 
 Generally, every GPU process reads one piece of data, that means one worker with 8 GPUs will need to allocate a total of 8x CPU memory for data.  But now they need just 1x if these GPUs belong to one pipeline under my special optimizations in this project . So **I strongly recommend you to train your model with faster and low-cost Pipeline Parallelism** rather than ZERO. Pipeline engine could directly load and save model's weights in HuggingFace's format. It could also resume from the checkpoint. If you want to resume interruption, any configs related to training shouldn't be modified, otherwise it may load model's parameters only.
