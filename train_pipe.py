@@ -24,7 +24,7 @@ from ds_utils import (
 from data.utils import (
     shuffle_rank_0,
     read_data)
-from lora import (
+from model.lora import (
     convert_linear_layer_to_lora,
     convert_lora_to_linear_layer,
     only_optimize_lora_parameters) 
@@ -51,10 +51,10 @@ parser.add_argument("--model",
                     type=str,
                     default= "baichuan-inc/Baichuan-13B-Chat",
                     help="huggingface's model path")
-parser.add_argument("--train-data-dir",
+parser.add_argument("--train-data",
                     type=str,
                     default= "news-commentary-v13-zh-en_Baichuan-13B-Chat",
-                    help="data dir for training")                       
+                    help="data for training")                       
 parser.add_argument('--offload',
                     action='store_true',
                     help='Enable ZeRO Offload techniques.')         
@@ -101,7 +101,7 @@ parser.add_argument('--only_optimize_lora',
 parser = deepspeed.add_config_arguments(parser)
 
 args=parser.parse_args()
-args.eval_data_dir = ""
+args.eval_data = ""
 args.checkpoint_dir = "check"
 args.from_pretrained_checkpoint = ""
 args.resume_dir = ""
@@ -184,11 +184,16 @@ def main():
     If you want to load the data into memory at one time, moving all the parquet files to same folder. 
     That may cause "num_update_steps_per_epoch" to be un-precision. But it donesn't matter.
     '''
-    train_data_partitions = [os.path.join(args.train_data_dir,f) for f in os.listdir(args.train_data_dir) if os.path.isdir(os.path.join(args.train_data_dir,f))]
+    if os.path.isfile(args.train_data):
+        from convert_raws_to_ids import write_parquet
+        cached_dir = os.path.splitext(os.path.basename(args.train_data))[0] + f"_{os.path.basename(args.model)}"
+        write_parquet(args.train_data,cached_dir,args.model,MAX_SEQ_LENGTH=2048)
+        args.train_data = cached_dir
+    train_data_partitions = [os.path.join(args.train_data,f) for f in os.listdir(args.train_data) if os.path.isdir(os.path.join(args.train_data,f))]
     
     num_train_batch =sum(
-        np.ceil(float(open(os.path.join(args.train_data_dir,f)).read().split()[0])/args.per_device_train_batch_size/args.data_parallel_size)
-        for f in os.listdir(args.train_data_dir) if f[-4:] == '.crc') 
+        np.ceil(float(open(os.path.join(args.train_data,f)).read().split()[0])/args.per_device_train_batch_size/args.data_parallel_size)
+        for f in os.listdir(args.train_data) if f[-4:] == '.crc') 
     num_update_steps_per_epoch = np.ceil(
         num_train_batch / args.gradient_accumulation_steps ) + len(train_data_partitions) - 1
     num_training_steps = int(args.num_train_epochs * num_update_steps_per_epoch)
@@ -206,7 +211,13 @@ def main():
         lr_scheduler=lr_scheduler,
         )
 
-    if args.eval_data_dir: eval_data_partitions = [os.path.join(args.eval_data_dir,f) for f in os.listdir(args.eval_data_dir) if os.path.isdir(os.path.join(args.eval_data_dir,f))]
+    if args.eval_data:
+        if os.path.isfile(args.eval_data):
+            from convert_raws_to_ids import write_parquet
+            cached_dir = os.path.splitext(os.path.basename(args.eval_data))[0] + f"_{os.path.basename(args.model)}"
+            write_parquet(args.eval_data,cached_dir,args.model,MAX_SEQ_LENGTH=2048)
+            args.eval_data = cached_dir
+        eval_data_partitions = [os.path.join(args.eval_data,f) for f in os.listdir(args.eval_data) if os.path.isdir(os.path.join(args.eval_data,f))]
         
     checkpoint_memory = []
     skiped_epoch = 0
@@ -275,7 +286,7 @@ def main():
             for step in range(start_step,cur_train_bacth_steps):
                 loss = engine.train_batch(data_iter=train_iter)
                 steps = engine.global_steps
-                if args.eval_data_dir and ((args.steps_per_eval>0 and steps % args.steps_per_checkpoint == 0) or steps == accumulation_train_steps):
+                if args.eval_data and ((args.steps_per_eval>0 and steps % args.steps_per_checkpoint == 0) or steps == accumulation_train_steps):
                     engine.eval()
                     eval_loss = 0
                     num_samples = 0

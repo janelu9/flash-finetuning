@@ -2,22 +2,27 @@
 
 Running Large Language Model easily, faster and low-cost.
 
-## Data Conversion
+## Data Processing
+
+This step is optional but recommended especially when your data are too big to be loaded to CPU memory at once.
+
+### Conversion
 
 Convert the raw data to token ids stored in parquet files.
 
 ```shell
 python convert_raws_to_ids.py \
-	--tokenizer baichuan-inc/Baichuan-13B-Chat \
+    --tokenizer baichuan-inc/Baichuan-13B-Chat \
     -i news-commentary-v13-zh-en.txt \
     -o news-commentary-v13-zh-en_Baichuan-13B-Chat
 ```
 
-Do a repartition(optional but recommended).  The fewer partitions, the better shuffle, but the larger CPU memory requirement during training. 1B token ids in parquet files take up to 2G of hard disk at most but require approximately 10G of CPU memory. Setting `num_partition` according to the CPU memory of each worker.
+### Repartition 
+
+Optional but recommended. The fewer partitions, the better shuffle, but the larger CPU memory requirement during training. 1B token ids in parquet files take up to 2G of hard disk at most but require approximately 10G of CPU memory. Setting `num_partition` according to the CPU memory of each worker.
 
 ```shell
-num_partition=2
-./repartition.sh news-commentary-v13-zh-en_Baichuan-13B-Chat $num_partition
+num_partition=2 && ./repartition.sh news-commentary-v13-zh-en_Baichuan-13B-Chat $num_partition
 ```
 
 ## Model Training
@@ -25,13 +30,17 @@ num_partition=2
 ### ZERO
 
 ```shell
-deepseed train_zero.py
+deepseed train_zero.py \
+    --model baichuan-inc/Baichuan-13B-Chat \
+    --train-data news-commentary-v13-zh-en.txt
 ```
 
 ### 3D Pipeline Parallelism (recommended)
 
 ```shell
-deepseed train_pipe.py --model baichuan-inc/Baichuan-13B-Chat --train-data-dir news-commentary-v13-zh-en_Baichuan-13B-Chat
+deepseed train_pipe.py \
+    --model baichuan-inc/Baichuan-13B-Chat \
+    --train-data news-commentary-v13-zh-en.txt
 ```
 
 Generally, every GPU process reads one piece of data, that means one worker with 8 GPUs will need to allocate a total of 8x CPU memory for data.  But now they need just 1x if these GPUs belong to one pipeline under my special optimizations in this project . So I strongly recommend you to train your model with faster and low-cost Pipeline Parallelism rather than ZERO. Pipeline engine could directly load and save model's weights in HuggingFace's format. It could also resume from the checkpoint. If you want to resume interruption, any configs related to training shouldn't be modified, otherwise it may load model's parameters only.
@@ -49,7 +58,9 @@ Generally, every GPU process reads one piece of data, that means one worker with
 ## Batch Inference
 
 ```shell
-python batch_infer.py --model baichuan-inc/Baichuan-13B-Chat --prompt-file prompt.txt
+python batch_infer.py \
+    --model baichuan-inc/Baichuan-13B-Chat \
+    --prompt-file prompt.txt
 ```
 
 ## API Server

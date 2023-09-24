@@ -19,10 +19,9 @@ import gc
 IGNORE_TOKEN_ID: int = -100
 OVERLAPPING_LENGTH: int  = 128
 FILTER_LENGTH: int  = 256
-PATTERN: str = "请将下文翻译为英文：{inp}"
 
 def clean_wikitext(string):
-    """ TODO"""
+    """TODO"""
     return string
 
 def wiki_generator(file,sep="\n\n"):
@@ -41,7 +40,7 @@ def wiki_generator(file,sep="\n\n"):
         if doc:
             yield clean_wikitext(doc)
             
-def token_wiki(file,tokenizer):
+def token_wiki(file,tokenizer,MAX_SEQ_LENGTH):
     for doc in wiki_generator(file):
         ids = [tokenizer.bos_token_id]
         ids.extend(tokenizer.encode(doc))
@@ -63,11 +62,11 @@ def qa_generator(file):
             yield line
             line = f.readline()
 
-def token_qa(file,tokenizer,ROLE = {},PREFIX = []):
+def token_qa(file,tokenizer,MAX_SEQ_LENGTH,ROLE = {},PREFIX = []):
     for sample in qa_generator(file):
         inp_anses = sample.strip().split("\t") # example data format: Input\tAnswer, modify by your will.
         if len(inp_anses) > 1:
-            msgs = PREFIX + [{"user":PATTERN.format(inp=content)} if i%2 == 0 else {"assistant":content} for i,content in enumerate(inp_anses)]
+            msgs = PREFIX + [{"user":content} if i%2 == 0 else {"assistant":content} for i,content in enumerate(inp_anses)]
             ids = []; divide = []; pre_k = "assistant"
             for msg in msgs:
                 k,v = next(iter(msg.items()))
@@ -102,14 +101,13 @@ def token_qa(file,tokenizer,ROLE = {},PREFIX = []):
                                                      IGNORE_TOKEN_ID = -100):
                     yield qa_inputs
    
-def write_parquet(filename,output_dir,dtype,compression):
+def write_parquet(filename,output_dir,tokenizer,MAX_SEQ_LENGTH=2048,dtype='qa',batch_size=2**15,compression='gzip'):
     #tokenizer = LlamaTokenizer.from_pretrained(args.tokenizer,fast_tokenizer=True,add_bos_token = False))
-    tokenizer = AutoTokenizer.from_pretrained(args.tokenizer,use_fast=False,trust_remote_code=True,add_bos_token = False)
+    tokenizer = AutoTokenizer.from_pretrained(tokenizer,use_fast=False,trust_remote_code=True,add_bos_token = False)
     tokenizer.pad_token_id=0
     tokenizer_class = tokenizer.__class__.__name__ 
     PREFIX = []
     if tokenizer_class == "BaichuanTokenizer":
-    
         ROLE = {
             'user':[195],
             'assistant':[196]
@@ -129,7 +127,6 @@ def write_parquet(filename,output_dir,dtype,compression):
             'user': nl_token_id + [tokenizer.bos_token_id] + user_id + nl_token_id,
             'assistant': [tokenizer.eos_token_id] + nl_token_id + [tokenizer.bos_token_id] + assistant_id + nl_token_id
         }
-        
         PREFIX = [{"system":""}]
         
     token = token_wiki
@@ -137,55 +134,52 @@ def write_parquet(filename,output_dir,dtype,compression):
     if dtype == 'qa':
         token = partial(token_qa,ROLE = ROLE, PREFIX = PREFIX)
         keys.append("labels")
-    data_batch={k:[] for k in keys}
-    item_iter = token(filename,tokenizer)
+    item_iter = token(filename,tokenizer,MAX_SEQ_LENGTH)
     file = os.path.splitext(os.path.basename(filename))[0]
-    out_dir = os.path.join(output_dir , file)
-    out_file = os.path.join(out_dir , f"{file}-part-%05d.{compression}.parquet")
+    partition_dir = os.path.join(output_dir , file)
+    partition_file = os.path.join(partition_dir , f"{file}-part-%05d.{compression}.parquet")
     check_file = os.path.join(output_dir , "." + file + ".crc")
     if os.path.exists(check_file):
-        print(f"{out_file} exists, continue!")
+        print(f"{filename} converted, continue!")
         return
-    if not os.path.exists(out_dir):
-        os.makedirs(out_dir)
-    batch_size = args.batch_size  
+    if not os.path.exists(partition_dir):
+        os.makedirs(partition_dir)
+    data_batch={k:[] for k in keys}
     for i,data in tqdm.tqdm(enumerate(item_iter)):
         for k in data_batch:
             data_batch[k].append(data[k])
         if (i+1) % batch_size == 0 :
             pyarrow.parquet.write_table(pyarrow.table([data_batch[k] for k in keys], names=keys),
-                                        out_file % (i//batch_size), 
+                                        partition_file % (i//batch_size), 
                                         compression=compression)            
             del data_batch
             gc.collect()
             data_batch={k:[] for k in keys}
     if data_batch[k]:
         pyarrow.parquet.write_table(pyarrow.table([data_batch[k] for k in keys], names=keys),
-                                    out_file % (i//batch_size), 
+                                    partition_file % (i//batch_size), 
                                     compression=compression)
     del data_batch                                
     os.system(f"echo '{i+1} {MAX_SEQ_LENGTH}' > {check_file}")
-    print(f"{filename} saved with {i+1} samples")
+    print(f"{filename} stored in parquet with {i+1} samples")
     gc.collect()
     
-parser = argparse.ArgumentParser()
-parser.add_argument('-t', type=str, default="qa")
-parser.add_argument('-i', type=str, default="data.txt")
-parser.add_argument('-o', type=str, default="")
-parser.add_argument('-n', type=int, default=2**23)
-parser.add_argument('-c', type=str, default="gzip",choices=('gzip','brotli','snappy','lz4','zstd'))
-parser.add_argument('--batch_size', type=int, default=2**15)
-parser.add_argument('--seq-len', type=int, default=2**11)
-parser.add_argument('--cores', type=int, default=-1)
-parser.add_argument('--tokenizer', type=str, default="openlm-research/open_llama_13b")
-parser.add_argument('--tmp', type=str, default="tmp")
-parser.add_argument('-T', action='store_true', help="thread")
-parser.add_argument('-C', action='store_true', help="clean")
-args = parser.parse_args()
-
 if __name__=='__main__':
+    parser = argparse.ArgumentParser()
+    parser.add_argument('-t', type=str, default="qa")
+    parser.add_argument('-i', type=str, default="data.txt")
+    parser.add_argument('-o', type=str, default="")
+    parser.add_argument('-n', type=int, default=2**23)
+    parser.add_argument('-c', type=str, default="gzip",choices=('gzip','brotli','snappy','lz4','zstd'))
+    parser.add_argument('--batch_size', type=int, default=2**15)
+    parser.add_argument('--seq-len', type=int, default=2**11)
+    parser.add_argument('--cores', type=int, default=-1)
+    parser.add_argument('--tokenizer', type=str, default="openlm-research/open_llama_13b")
+    parser.add_argument('--tmp', type=str, default="tmp")
+    parser.add_argument('-T', action='store_true', help="thread")
+    parser.add_argument('-C', action='store_true', help="clean")
+    args = parser.parse_args()
     print(args)
-    MAX_SEQ_LENGTH = args.seq_len
     source=os.path.abspath(args.i)
     source_dir=os.path.dirname(source)
     file =os.path.basename(source)
@@ -198,7 +192,6 @@ if __name__=='__main__':
             os.system(f"cd {tmp};split -d -{args.n} ../{file} {file_name}-part-;cd -;")
     else:
         tmp = source
-    compression = args.c.lower()
     output_dir = args.o if args.o !="" else os.path.join(source_dir,file_name+f"_{os.path.basename(args.tokenizer)}")
     if os.path.exists(output_dir):
         if args.C:
@@ -211,7 +204,7 @@ if __name__=='__main__':
     cpus=int(os.cpu_count()*0.8) if args.cores <0 else  args.cores
     print(f"########## begine converting {args.t} data with {cpus} executors.###########" )
     with Pool(max_workers=cpus) as exe:
-        func = partial(write_parquet,output_dir=output_dir,dtype=args.t,compression=compression)
+        func = partial(write_parquet,output_dir=output_dir,tokenizer=args.tokenizer,MAX_SEQ_LENGTH= args.seq_len,dtype=args.t,batch_size=args.batch_size,compression=args.c.lower())
         files =[os.path.join(tmp, i) for i in os.listdir(tmp)]
         files.sort()
         np.random.shuffle(files)
