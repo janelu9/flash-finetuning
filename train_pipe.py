@@ -109,14 +109,14 @@ args.steps_per_checkpoint = -1
 args.zero_stage=0
 args.num_train_epochs=1
 args.per_device_train_batch_size = 1
-args.gradient_accumulation_steps = 2
+args.gradient_accumulation_steps = 32
 args.seed=1234
 args.weight_decay=0.01
 args.lr_scheduler_type="cosine"
 args.num_warmup_steps=100
 args.learning_rate=3e-4
 args.output_dir = "./output"
-args.pipe_parallel_size = 1
+args.pipe_parallel_size = 8
 args.model_parallel_size = 1
 args.gradient_checkpointing = not args.only_optimize_lora
 try:
@@ -185,7 +185,7 @@ def main():
     That may cause "num_update_steps_per_epoch" to be un-precision. But it donesn't matter.
     '''
     if os.path.isfile(args.train_data):
-        from convert_raws_to_ids import write_parquet
+        from convert_raw_to_ids import write_parquet
         cached_dir = os.path.splitext(os.path.basename(args.train_data))[0] + f"_{os.path.basename(args.model)}"
         write_parquet(args.train_data,cached_dir,args.model,MAX_SEQ_LENGTH=2048)
         args.train_data = cached_dir
@@ -213,7 +213,7 @@ def main():
 
     if args.eval_data:
         if os.path.isfile(args.eval_data):
-            from convert_raws_to_ids import write_parquet
+            from convert_raw_to_ids import write_parquet
             cached_dir = os.path.splitext(os.path.basename(args.eval_data))[0] + f"_{os.path.basename(args.model)}"
             write_parquet(args.eval_data,cached_dir,args.model,MAX_SEQ_LENGTH=2048)
             args.eval_data = cached_dir

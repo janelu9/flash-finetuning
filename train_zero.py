@@ -134,7 +134,7 @@ def main():
                               betas=(0.9, 0.95))
                               
     if os.path.isfile(args.train_data):
-        from convert_raws_to_ids import write_parquet
+        from convert_raw_to_ids import write_parquet
         cached_dir = os.path.splitext(os.path.basename(args.train_data))[0] + f"_{os.path.basename(args.model)}"
         write_parquet(args.train_data,cached_dir,args.model,MAX_SEQ_LENGTH=2048)
         args.train_data = cached_dir

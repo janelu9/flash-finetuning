@@ -2,7 +2,7 @@
 
 Running Large Language Model easily, faster and low-cost.
 
-## Data Processing
+## Data Compression
 
 This step is optional but recommended especially when your data are too big to be loaded to CPU memory at once.
 
@@ -11,7 +11,7 @@ This step is optional but recommended especially when your data are too big to b
 Convert the raw data to token ids stored in parquet files.
 
 ```shell
-python convert_raws_to_ids.py \
+python convert_raw_to_ids.py \
     --tokenizer baichuan-inc/Baichuan-13B-Chat \
     -i news-commentary-v13-zh-en.txt \
     -o news-commentary-v13-zh-en_Baichuan-13B-Chat
