@@ -45,6 +45,14 @@ parser = argparse.ArgumentParser(description='My training script.')
 parser.add_argument('--local_rank', type=int, default=-1,
                     help='local rank passed from distributed launcher')        
 # Include DeepSpeed configuration arguments
+parser.add_argument("--model",
+                    type=str,
+                    default= "openlm-research/open_llama_13b",
+                    help="huggingface's model path")
+parser.add_argument("--train-data",
+                    type=str,
+                    default= "",
+                    help="data for training") 
 parser.add_argument('--offload',
                     action='store_true',
                     help='Enable ZeRO Offload techniques.')         
@@ -74,8 +82,6 @@ parser.add_argument('--only_optimize_lora',
 parser = deepspeed.add_config_arguments(parser)
 
 args=parser.parse_args()
-args.model_path = "openlm-research/open_llama_13b"
-args.train_data = "news-commentary-v13-zh-en_open_llama_13b"
 args.zero_stage=3
 args.num_train_epochs=1
 args.per_device_train_batch_size = 1
@@ -109,7 +115,7 @@ def main():
     set_random_seed(args.seed)
     torch.distributed.barrier()
     
-    model = LlamaForCausalLM.from_pretrained(args.model_path)
+    model = LlamaForCausalLM.from_pretrained(args.model)
     # dschf = HfDeepSpeedConfig(ds_config)
     # print_rank_0(dschf,args.global_rank)
     if args.lora_dim > 0:
@@ -127,7 +133,11 @@ def main():
                               lr=args.learning_rate,
                               betas=(0.9, 0.95))
                               
-
+    if os.path.isfile(args.train_data):
+        from convert_raws_to_ids import write_parquet
+        cached_dir = os.path.splitext(os.path.basename(args.train_data))[0] + f"_{os.path.basename(args.model)}"
+        write_parquet(args.train_data,cached_dir,args.model,MAX_SEQ_LENGTH=2048)
+        args.train_data = cached_dir
     train_data_partitions = [os.path.join(args.train_data,f) for f in os.listdir(args.train_data) if os.path.isdir(os.path.join(args.train_data,f))]
     
     num_train_batch =sum(
