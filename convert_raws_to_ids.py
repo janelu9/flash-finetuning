@@ -108,8 +108,8 @@ def write_parquet(filename,output_dir,tokenizer,MAX_SEQ_LENGTH=2048,dtype='qa',b
     tokenizer_class = tokenizer.__class__.__name__ 
     PREFIX = []
     ROLE = {
-        'user':[tokenizer.encode("user:")],
-        'assistant':[tokenizer.encode("assistant:")]
+        'user': tokenizer.encode("user:"),
+        'assistant': tokenizer.encode("assistant:")
     }
     if tokenizer_class == "BaichuanTokenizer":
         ROLE = {
