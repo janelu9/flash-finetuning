@@ -82,7 +82,7 @@ parser.add_argument('--only_optimize_lora',
 parser = deepspeed.add_config_arguments(parser)
 
 args=parser.parse_args()
-args.zero_stage=3
+args.zero_stage=0
 args.num_train_epochs=1
 args.per_device_train_batch_size = 1
 args.gradient_accumulation_steps =1
@@ -106,13 +106,19 @@ def main():
     args.world_size = torch.distributed.get_world_size()
     ds_config = get_train_ds_config(offload=args.offload,
                                     stage=args.zero_stage,
-                                    max_out_tokens=args.max_len)
+                                    max_out_tokens=args.seq_length)
     ds_config[
         'train_micro_batch_size_per_gpu'] = args.per_device_train_batch_size
     ds_config[
         'train_batch_size'] = args.per_device_train_batch_size * args.world_size * args.gradient_accumulation_steps
     ds_config['steps_per_print'] = args.steps_per_print
     set_random_seed(args.seed)
+    if os.path.isfile(args.train_data) and args.global_rank == 0:
+        from convert_raw_to_ids import write_parquet
+        cached_dir = os.path.splitext(os.path.basename(args.train_data))[0] + f"_{os.path.basename(args.model)}"
+        write_parquet(args.train_data,cached_dir,args.model,MAX_SEQ_LENGTH=args.seq_length)
+        args.train_data = cached_dir
+    train_data_partitions = [os.path.join(args.train_data,f) for f in os.listdir(args.train_data) if os.path.isdir(os.path.join(args.train_data,f))]
     torch.distributed.barrier()
     
     model = LlamaForCausalLM.from_pretrained(args.model)
@@ -133,13 +139,6 @@ def main():
                               lr=args.learning_rate,
                               betas=(0.9, 0.95))
                               
-    if os.path.isfile(args.train_data):
-        from convert_raw_to_ids import write_parquet
-        cached_dir = os.path.splitext(os.path.basename(args.train_data))[0] + f"_{os.path.basename(args.model)}"
-        write_parquet(args.train_data,cached_dir,args.model,MAX_SEQ_LENGTH=args.seq_length)
-        args.train_data = cached_dir
-    train_data_partitions = [os.path.join(args.train_data,f) for f in os.listdir(args.train_data) if os.path.isdir(os.path.join(args.train_data,f))]
-    
     num_train_batch =sum(
         np.ceil(float(open(os.path.join(args.train_data,f)).read().split()[0])
                 /args.per_device_train_batch_size

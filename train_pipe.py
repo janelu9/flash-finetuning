@@ -147,7 +147,21 @@ def main():
         'train_batch_size'] = args.per_device_train_batch_size*args.gradient_accumulation_steps*args.data_parallel_size
     ds_config['steps_per_print'] = args.steps_per_print
     set_random_seed(args.seed)
-    if args.checkpoint_dir and not os.path.exists(args.checkpoint_dir) and args.global_rank ==0 : os.system(f"mkdir -p {args.checkpoint_dir}")
+    if args.checkpoint_dir and not os.path.exists(args.checkpoint_dir) and args.global_rank ==0: 
+        os.system(f"mkdir -p {args.checkpoint_dir}")
+    if os.path.isfile(args.train_data) and args.global_rank ==0:
+        from convert_raw_to_ids import write_parquet
+        cached_dir = os.path.splitext(os.path.basename(args.train_data))[0] + f"_{os.path.basename(args.model)}"
+        write_parquet(args.train_data,cached_dir,args.model,MAX_SEQ_LENGTH=args.seq_length)
+        args.train_data = cached_dir  
+    train_data_partitions = [os.path.join(args.train_data,f) for f in os.listdir(args.train_data) if os.path.isdir(os.path.join(args.train_data,f))]
+    if args.eval_data:
+        if os.path.isfile(args.eval_data) and args.global_rank ==0:
+            from convert_raw_to_ids import write_parquet
+            cached_dir = os.path.splitext(os.path.basename(args.eval_data))[0] + f"_{os.path.basename(args.model)}"
+            write_parquet(args.eval_data,cached_dir,args.model,MAX_SEQ_LENGTH=args.seq_length)
+            args.eval_data = cached_dir
+        eval_data_partitions = [os.path.join(args.eval_data,f) for f in os.listdir(args.eval_data) if os.path.isdir(os.path.join(args.eval_data,f))]   
     torch.distributed.barrier()
 
     config = AutoConfig.from_pretrained(args.model,trust_remote_code=True)
@@ -183,14 +197,7 @@ def main():
     How many folders, how many partitions. 
     If you want to load the data into memory at one time, moving all the parquet files to same folder. 
     That may cause "num_update_steps_per_epoch" to be un-precision. But it donesn't matter.
-    '''
-    if os.path.isfile(args.train_data):
-        from convert_raw_to_ids import write_parquet
-        cached_dir = os.path.splitext(os.path.basename(args.train_data))[0] + f"_{os.path.basename(args.model)}"
-        write_parquet(args.train_data,cached_dir,args.model,MAX_SEQ_LENGTH=args.seq_length)
-        args.train_data = cached_dir
-    train_data_partitions = [os.path.join(args.train_data,f) for f in os.listdir(args.train_data) if os.path.isdir(os.path.join(args.train_data,f))]
-    
+    ''' 
     num_train_batch =sum(
         np.ceil(float(open(os.path.join(args.train_data,f)).read().split()[0])/args.per_device_train_batch_size/args.data_parallel_size)
         for f in os.listdir(args.train_data) if f[-4:] == '.crc') 
@@ -210,15 +217,7 @@ def main():
         optimizer=optimizer,
         lr_scheduler=lr_scheduler,
         )
-
-    if args.eval_data:
-        if os.path.isfile(args.eval_data):
-            from convert_raw_to_ids import write_parquet
-            cached_dir = os.path.splitext(os.path.basename(args.eval_data))[0] + f"_{os.path.basename(args.model)}"
-            write_parquet(args.eval_data,cached_dir,args.model,MAX_SEQ_LENGTH=args.seq_length)
-            args.eval_data = cached_dir
-        eval_data_partitions = [os.path.join(args.eval_data,f) for f in os.listdir(args.eval_data) if os.path.isdir(os.path.join(args.eval_data,f))]
-        
+      
     checkpoint_memory = []
     skiped_epoch = 0
     skiped_partition_id = 0
