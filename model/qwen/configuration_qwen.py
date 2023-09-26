@@ -35,6 +35,8 @@ class QWenConfig(PretrainedConfig):
         intermediate_size=22016,
         no_bias=True,
         tie_word_embeddings=False,
+        use_cache_quantization=False,
+        use_cache_kernel=False,
         **kwargs,
     ):
         self.vocab_size = vocab_size
@@ -59,6 +61,8 @@ class QWenConfig(PretrainedConfig):
         self.use_logn_attn = use_logn_attn
         self.use_flash_attn = use_flash_attn
         self.no_bias = no_bias
+        self.use_cache_quantization=use_cache_quantization
+        self.use_cache_kernel=use_cache_kernel
         super().__init__(
             tie_word_embeddings=tie_word_embeddings,
             **kwargs
