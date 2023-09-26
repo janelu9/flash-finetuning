@@ -163,8 +163,10 @@ def main():
             args.eval_data = cached_dir
         eval_data_partitions = [os.path.join(args.eval_data,f) for f in os.listdir(args.eval_data) if os.path.isdir(os.path.join(args.eval_data,f))]   
     torch.distributed.barrier()
-
-    config = AutoConfig.from_pretrained(args.model,trust_remote_code=True)
+    try:
+        config = AutoConfig.from_pretrained(args.model)
+    except:
+        config = AutoConfig.from_pretrained(args.model,trust_remote_code=True)
     topo = ProcessTopology(['data','model','pipe'], [args.data_parallel_size, args.model_parallel_size, args.pipe_parallel_size])
     args.seed = args.seed + topo.get_coord(args.global_rank).pipe
     model = ModelPipe[config.model_type](
@@ -174,7 +176,7 @@ def main():
         loss_fn=CrossEntropyLossPipe[config.model_type](),
         topology=topo,
         base_seed=args.seed,
-        partition_method="type:DecoderLayer",
+        # partition_method="type:DecoderLayer",
         )
     if not(args.resume_dir or args.from_pretrained_checkpoint): model.from_pretrained(args.model)
     
