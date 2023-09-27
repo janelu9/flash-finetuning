@@ -17,7 +17,7 @@ import os
 import gc
 
 IGNORE_TOKEN_ID: int = -100
-OVERLAPPING_LENGTH: int  = 4
+OVERLAPPING_LENGTH: int  = 1
 FILTER_LENGTH: int  = 128
 SPLIT_LENGTH: int = 65536
 
@@ -28,8 +28,8 @@ def clean_wikitext(string):
 def split_doc(doc):
     p=0;l=len(doc)
     while p<l:
-        yield clean_wikitext(doc[p:p+SPLIT_LENGTH])
-        p += SPLIT_LENGTH - 6
+        yield p == 0,clean_wikitext(doc[p:p+SPLIT_LENGTH]),(p+SPLIT_LENGTH) >= l
+        p += SPLIT_LENGTH - 4
 
 def wiki_generator(file,sep="\n\n"):
     with open(file,"r") as f:
@@ -45,10 +45,13 @@ def wiki_generator(file,sep="\n\n"):
             yield split_doc(doc)
             
 def token_wiki(file,tokenizer,MAX_SEQ_LENGTH):
-    for doc in wiki_generator(file):
-        ids = [tokenizer.bos_token_id]
+    for bos,doc,eos in wiki_generator(file):
+        ids = []
+        if bos:
+            ids.append(tokenizer.bos_token_id)
         ids.extend(tokenizer.encode(doc))
-        ids.append(tokenizer.eos_token_id)
+        if eos:
+            ids.append(tokenizer.eos_token_id)
         p=0
         n = len(ids)
         while p<n:
