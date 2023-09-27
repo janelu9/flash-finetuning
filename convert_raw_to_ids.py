@@ -17,12 +17,19 @@ import os
 import gc
 
 IGNORE_TOKEN_ID: int = -100
-OVERLAPPING_LENGTH: int  = 128
-FILTER_LENGTH: int  = 256
+OVERLAPPING_LENGTH: int  = 4
+FILTER_LENGTH: int  = 128
+SPLIT_LENGTH: int = 65536
 
 def clean_wikitext(string):
     """TODO"""
     return string
+
+def split_doc(doc):
+    p=0;l=len(doc)
+    while p<l:
+        yield clean_wikitext(doc[p:p+SPLIT_LENGTH])
+        p += SPLIT_LENGTH - 6
 
 def wiki_generator(file,sep="\n\n"):
     with open(file,"r") as f:
@@ -30,15 +37,12 @@ def wiki_generator(file,sep="\n\n"):
         line = f.readline()
         while line:
             doc+=line
-            if doc[-2:]==sep:
-                p=0;l=len(doc)
-                while p<l:
-                    yield clean_wikitext(doc[p:p+100000])
-                    p += 100000 - 1024
+            if doc[-2:]==sep or len(doc)>=SPLIT_LENGTH:
+                yield split_doc(doc)
                 doc=""
             line = f.readline()  
         if doc:
-            yield clean_wikitext(doc)
+            yield split_doc(doc)
             
 def token_wiki(file,tokenizer,MAX_SEQ_LENGTH):
     for doc in wiki_generator(file):

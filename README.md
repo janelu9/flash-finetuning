@@ -49,7 +49,7 @@ Generally, every GPU process reads one piece of data, that means one worker with
 
 |    Model     | Pipeline Stages | Training Speed (tokens/s) |
 | :----------: | :-------------: | :-----------------------: |
-|  llama-13b   |        8        |         82391.04          |
+|  llama-13b   |        8        |         82540.54          |
 | baichuan-13b |        8        |         67174.40          |
 |   qwen-7b    |        4        |         122033.10         |
 |   qwen-14b   |        8        |         75915.26          |
