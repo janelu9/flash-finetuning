@@ -237,7 +237,7 @@ def main():
         except:
             try:
                 if not args.from_pretrained_checkpoint:args.from_pretrained_checkpoint = args.resume_dir
-                print_rank_0("Only model's weights are loaded.", args.global_rank)
+                print_rank_0("Only model's will be loaded.", args.global_rank)
                 if engine.bfloat16_enabled():
                     engine._config.bfloat16_enabled = False
                     _,ckpt_config=engine.load_checkpoint(args.from_pretrained_checkpoint,load_module_only=True)
@@ -249,6 +249,7 @@ def main():
                 skiped_partition_id = ckpt_config["ds_config"].get("partition_id",-1) + 1         
             except:
                 print_rank_0("No checkpoint's parameters were loaded.",args.global_rank)
+                engine.module.from_pretrained(args.model)
                 
     accumulation_train_steps = engine.global_steps
     print_rank_0(args, args.global_rank)
