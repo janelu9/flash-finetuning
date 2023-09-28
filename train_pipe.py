@@ -248,7 +248,7 @@ def main():
                 skiped_epoch = ckpt_config["ds_config"].get("epoch",0)
                 skiped_partition_id = ckpt_config["ds_config"].get("partition_id",-1) + 1         
             except:
-                print_rank_0("No checkpoint's weights were loaded.",args.global_rank)
+                print_rank_0("No checkpoint's parameters were loaded.",args.global_rank)
                 
     accumulation_train_steps = engine.global_steps
     print_rank_0(args, args.global_rank)
