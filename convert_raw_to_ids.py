@@ -38,11 +38,13 @@ def wiki_generator(file,sep="\n\n"):
         while line:
             doc+=line
             if doc[-2:]==sep or len(doc)>=SPLIT_LENGTH:
-                yield split_doc(doc)
+                for block in split_doc(doc):
+                    yield block
                 doc=""
             line = f.readline()  
         if doc:
-            yield split_doc(doc)
+                for block in split_doc(doc):
+                    yield block
             
 def token_wiki(file,tokenizer,MAX_SEQ_LENGTH):
     for bos,doc,eos in wiki_generator(file):
