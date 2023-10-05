@@ -25,6 +25,8 @@ Optional but recommended. The fewer partitions, the better shuffle, but the larg
 num_partition=2 && ./repartition.sh news-commentary-v13-zh-en_Baichuan-13B-Chat $num_partition
 ```
 
+***Note**: This shell script shuffles data by parquet file(a batch of samples), You can also use [Spark](https://spark.apache.org) to sort and then shuffle the data by sample.*
+
 ## Model Training
 
 ### ZERO
@@ -54,7 +56,7 @@ Generally, every GPU process reads one piece of data, that means one worker with
 |   qwen-7b    |        4        |         122033.10         |
 |   qwen-14b   |        8        |         75915.26          |
 
-**Note**: The training speed of each model was measured on 64 NVIDIA A100-PCIE-40GB GPUs with data type of bfloat16 and batch token size of 4M(`batch_size*seq_length`).
+***Note**: The training speed of each model was measured on 64 NVIDIA A100-PCIE-40GB GPUs with data type of bfloat16 and batch token size of 4M(`batch_size*seq_length`).*
 
 ## Batch Inference
 
