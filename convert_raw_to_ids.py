@@ -7,7 +7,7 @@
 from functools import partial
 from transformers import AutoTokenizer,LlamaTokenizer
 from concurrent.futures import ThreadPoolExecutor,ProcessPoolExecutor
-from data.utils import qa_inputs_generator
+from easyllm.data.utils import qa_inputs_generator
 import pyarrow.parquet
 import numpy as np
 import argparse

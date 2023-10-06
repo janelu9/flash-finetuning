@@ -6,7 +6,7 @@
 
 import torch
 import deepspeed
-from ds_utils import (
+from easyllm.ds_utils import (
     print_rank_0,
     to_device,
     save_hf_format,
@@ -16,7 +16,7 @@ from ds_utils import (
     save_zero_three_model,
     load_hf_tokenizer,
     get_train_ds_config)
-from data.utils import (
+from easyllm.data.utils import (
     shuffle_rank_0,
     PromptDataset,
     PromptDataCollator)
@@ -27,7 +27,7 @@ from transformers import (
     SchedulerType,
     default_data_collator,
     get_scheduler,)
-from model.lora import (
+from easyllm.model.lora import (
     convert_linear_layer_to_lora,
     convert_lora_to_linear_layer,
     only_optimize_lora_parameters)

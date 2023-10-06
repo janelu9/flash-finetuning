@@ -25,7 +25,7 @@ Optional but recommended. The fewer partitions, the better shuffle, but the larg
 num_partition=2 && ./repartition.sh news-commentary-v13-zh-en_Baichuan-13B-Chat $num_partition
 ```
 
-***Note**: This shell script shuffles data by parquet file(a batch of samples), You can also use [Spark](https://spark.apache.org) to sort and then shuffle the data by sample.*
+***Note**: This shell script shuffles data by parquet file(a batch of samples), You can also use [Spark](https://spark.apache.org) to shuffle the data by sample.*
 
 ## Model Training
 
