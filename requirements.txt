@@ -6,4 +6,5 @@ accelerate
 flash-attn
 xformers
 pyarrow
+tiktoken
 vllm

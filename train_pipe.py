@@ -88,8 +88,8 @@ parser = deepspeed.add_config_arguments(parser)
 args=parser.parse_args()
 args.eval_data = ""
 args.checkpoint_dir = "check"
-args.from_pretrained_checkpoint = ""
-args.resume_dir = "check"
+args.from_ckpt = ""
+args.resume_ckpt = ""
 args.steps_per_checkpoint = -1
 args.zero_stage=0
 args.num_train_epochs=1
@@ -135,14 +135,14 @@ def main(args):
     if args.checkpoint_dir and not os.path.exists(args.checkpoint_dir) and args.global_rank ==0: 
         os.system(f"mkdir -p {args.checkpoint_dir}")
     if os.path.isfile(args.train_data) and args.global_rank ==0:
-        from convert_raw_to_ids import write_parquet
+        from easyllm.data.convert_raw_to_ids import write_parquet
         cached_dir = os.path.splitext(os.path.basename(args.train_data))[0] + f"_{os.path.basename(args.model)}"
         write_parquet(args.train_data,cached_dir,args.model,MAX_SEQ_LENGTH=args.seq_length)
         args.train_data = cached_dir  
     train_data_partitions = [os.path.join(args.train_data,f) for f in os.listdir(args.train_data) if os.path.isdir(os.path.join(args.train_data,f))]
     if args.eval_data:
         if os.path.isfile(args.eval_data) and args.global_rank ==0:
-            from convert_raw_to_ids import write_parquet
+            from easyllm.data.convert_raw_to_ids import write_parquet
             cached_dir = os.path.splitext(os.path.basename(args.eval_data))[0] + f"_{os.path.basename(args.model)}"
             write_parquet(args.eval_data,cached_dir,args.model,MAX_SEQ_LENGTH=args.seq_length)
             args.eval_data = cached_dir
@@ -163,7 +163,7 @@ def main(args):
         base_seed=args.seed,
         # partition_method="type:DecoderLayer",
         )
-    if not(args.resume_dir or args.from_pretrained_checkpoint): model.from_pretrained(args.model)
+    if not(args.resume_ckpt or args.from_ckpt): model.from_pretrained(args.model)
     
     if args.lora_dim > 0:
         model = convert_linear_layer_to_lora(
