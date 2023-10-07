@@ -1,6 +1,6 @@
 import setuptools
 
-project_name = "easy_llm"  
+project_name = "jllm"  
 version = "0.0.1" 
  
 setuptools.setup(

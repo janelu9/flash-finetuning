@@ -10,16 +10,16 @@ from transformers import (
     AutoConfig,
     SchedulerType,
     get_scheduler,)
-from easy_llm.utils import (
+from jllm.utils import (
     set_random_seed,
     get_optimizer_grouped_parameters)
-from easy_llm.model import (
+from jllm.model import (
     convert_linear_layer_to_lora,
     only_optimize_lora_parameters,
     ModelPipe,
     CrossEntropyLossPipe
     )
-import easy_llm
+import jllm
 from ds_utils import get_train_ds_config
 from deepspeed.ops.adam import DeepSpeedCPUAdam, FusedAdam
 from deepspeed.runtime.pipe import ProcessTopology
@@ -134,14 +134,14 @@ def main(args):
     if args.checkpoint_dir and not os.path.exists(args.checkpoint_dir) and args.global_rank ==0: 
         os.system(f"mkdir -p {args.checkpoint_dir}")
     if os.path.isfile(args.train_data) and args.global_rank ==0:
-        from easy_llm.data import write_parquet
+        from jllm.data import write_parquet
         cached_dir = os.path.splitext(os.path.basename(args.train_data))[0] + f"_{os.path.basename(args.model)}"
         write_parquet(args.train_data,cached_dir,args.model,MAX_SEQ_LENGTH=args.seq_length)
         args.train_data = cached_dir  
     train_data_partitions = [os.path.join(args.train_data,f) for f in os.listdir(args.train_data) if os.path.isdir(os.path.join(args.train_data,f))]
     if args.eval_data:
         if os.path.isfile(args.eval_data) and args.global_rank ==0:
-            from easy_llm.data import write_parquet
+            from jllm.data import write_parquet
             cached_dir = os.path.splitext(os.path.basename(args.eval_data))[0] + f"_{os.path.basename(args.model)}"
             write_parquet(args.eval_data,cached_dir,args.model,MAX_SEQ_LENGTH=args.seq_length)
             args.eval_data = cached_dir
@@ -205,7 +205,7 @@ def main(args):
         )
       
 
-    easy_llm.train(args,engine,train_data_partitions,eval_data_partitions if args.eval_data else None)
+    jllm.train(args,engine,train_data_partitions,eval_data_partitions if args.eval_data else None)
     
 
 if __name__ == "__main__":
