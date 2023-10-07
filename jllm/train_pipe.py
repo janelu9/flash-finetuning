@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # coding: utf-8
 # Created on Thur Jun 29 09:36:49 2023
-# @author: Lu Jian
+# @author: Jian Lu
 # Email:janelu@live.cn;
 
 import torch
@@ -10,21 +10,21 @@ from transformers import (
     AutoConfig,
     SchedulerType,
     get_scheduler,)
-from jllm.utils import (
+from .utils import (
     set_random_seed,
     get_optimizer_grouped_parameters)
-from jllm.model import (
+from .model import (
     convert_linear_layer_to_lora,
     only_optimize_lora_parameters,
     ModelPipe,
     CrossEntropyLossPipe
     )
-import jllm
-from ds_utils import get_train_ds_config
+from .trainer import train
 from deepspeed.ops.adam import DeepSpeedCPUAdam, FusedAdam
 from deepspeed.runtime.pipe import ProcessTopology
 import numpy as np
 import os
+import importlib
 import argparse
 
 parser = argparse.ArgumentParser(description='My training script.')
@@ -37,11 +37,71 @@ parser.add_argument("--model",
                     help="huggingface's model path")
 parser.add_argument("--train-data",
                     type=str,
-                    default= "news-commentary-v13-zh-en_Baichuan-13B-Chat",
-                    help="data for training")                       
+                    default= "",
+                    help="data for training")
+parser.add_argument("--eval-data",
+                    type=str,
+                    default= "",
+                    help="data for evalution")
+parser.add_argument("--from_ckpt",
+                    type=str,
+                    default= "",
+                    help="ckpt dir to load pretrained model parameters")
+parser.add_argument("--resume_ckpt",
+                    type=str,
+                    default= "",
+                    help="ckpt dir to resume interruption")
+parser.add_argument("--ds_config",
+                    type=str,
+                    default= "ds_config.py",
+                    help="deepspeed's config file")
+parser.add_argument('--zero_stage',
+                    type=int,
+                    default=0,
+                    help='zero stage')
+parser.add_argument('--pipe_parallel_size',
+                    type=int,
+                    default=1,
+                    help='pipe parallel size')
+parser.add_argument('--model_parallel_size',
+                    type=int,
+                    default=1,
+                    help='model parallel size')
 parser.add_argument('--offload',
                     action='store_true',
-                    help='Enable ZeRO Offload techniques.')         
+                    help='Enable ZeRO Offload techniques.') 
+parser.add_argument('--num_train_epochs',
+                    type=int,
+                    default=1,
+                    help='train epochs')
+parser.add_argument('--per_device_train_batch_size',
+                    type=int,
+                    default=2,
+                    help='per device train batch_size')
+parser.add_argument('--gradient_accumulation_steps',
+                    type=int,
+                    default=1,
+                    help='gradient accumulation steps')
+parser.add_argument("--weight_decay",
+                    type=float,
+                    default=0.,
+                    help="Weight decay to use.")
+parser.add_argument("--lr_scheduler_type",
+                    type=SchedulerType,
+                    default="cosine",
+                    help="The scheduler type to use.",
+                    choices=[
+                        "linear", "cosine", "cosine_with_restarts", "polynomial",
+                        "constant", "constant_with_warmup"
+                    ])
+parser.add_argument("--num_warmup_steps",
+                    type=float,
+                    default=0,
+                    help="Number or rate of steps for the warmup in the lr scheduler.")
+parser.add_argument("--learning_rate",
+                    type=float,
+                    default=3e-4,
+                    help= "Initial learning rate (after the potential warmup period) to use.",)
 parser.add_argument('--seq_length',
                     type=int,
                     default=2048,
@@ -66,9 +126,17 @@ parser.add_argument('--max_num_checkpoints',
                     type=int,
                     default=-1,
                     help='max checkpoint num')
-parser.add_argument('--gradient_checkpointing',
+parser.add_argument('--no_gradient_checkpointing',
                     action='store_true',
                     help='Enable gradient checkpointing for model.')
+parser.add_argument("--seed",
+                    type=int,
+                    default=1234,
+                    help="A seed for reproducible training.")
+parser.add_argument("--output_dir",
+                    type=str,
+                    default="",
+                    help="Where to store the model.")
 ## LoRA for efficient training setting
 parser.add_argument("--lora_dim",
                     type=int,
@@ -83,32 +151,17 @@ parser.add_argument('--only_optimize_lora',
                     help='Only optimize the LoRA parameters.')
                     
 parser = deepspeed.add_config_arguments(parser)
-
 args=parser.parse_args()
-args.eval_data = ""
-args.checkpoint_dir = "check"
-args.from_ckpt = ""
-args.resume_ckpt = ""
-args.steps_per_checkpoint = -1
-args.zero_stage=0
-args.num_train_epochs=1
-args.per_device_train_batch_size = 1
-args.gradient_accumulation_steps = 2
-args.seed=1234
-args.weight_decay=0.01
-args.lr_scheduler_type="cosine"
-args.num_warmup_steps=100
-args.learning_rate=3e-4
-args.output_dir = "./output"
-args.pipe_parallel_size = 1
-args.model_parallel_size = 1
-args.gradient_checkpointing = not args.only_optimize_lora
+get_train_ds_config = importlib.import_module(os.path.splitext(args.ds_config)[0]).get_train_ds_config
+
 try:
     import flash_attn
     import xformers
     args.fast = True 
 except:
-    args.fast = False 
+    args.fast = False
+    
+
 
 def main(args):
     if args.local_rank == -1:
@@ -134,14 +187,14 @@ def main(args):
     if args.checkpoint_dir and not os.path.exists(args.checkpoint_dir) and args.global_rank ==0: 
         os.system(f"mkdir -p {args.checkpoint_dir}")
     if os.path.isfile(args.train_data) and args.global_rank ==0:
-        from jllm.data import write_parquet
+        from .convert_raw_to_ids import write_parquet
         cached_dir = os.path.splitext(os.path.basename(args.train_data))[0] + f"_{os.path.basename(args.model)}"
         write_parquet(args.train_data,cached_dir,args.model,MAX_SEQ_LENGTH=args.seq_length)
         args.train_data = cached_dir  
     train_data_partitions = [os.path.join(args.train_data,f) for f in os.listdir(args.train_data) if os.path.isdir(os.path.join(args.train_data,f))]
     if args.eval_data:
         if os.path.isfile(args.eval_data) and args.global_rank ==0:
-            from jllm.data import write_parquet
+            from .convert_raw_to_ids import write_parquet
             cached_dir = os.path.splitext(os.path.basename(args.eval_data))[0] + f"_{os.path.basename(args.model)}"
             write_parquet(args.eval_data,cached_dir,args.model,MAX_SEQ_LENGTH=args.seq_length)
             args.eval_data = cached_dir
@@ -155,7 +208,7 @@ def main(args):
     args.seed = args.seed + topo.get_coord(args.global_rank).pipe
     model = ModelPipe[config.model_type](
         config,
-        args.gradient_checkpointing,
+        not args.no_gradient_checkpointing and not args.only_optimize_lora,
         args.fast,
         loss_fn=CrossEntropyLossPipe[config.model_type](),
         topology=topo,
@@ -205,7 +258,7 @@ def main(args):
         )
       
 
-    jllm.train(args,engine,train_data_partitions,eval_data_partitions if args.eval_data else None)
+    train(args,engine,train_data_partitions,eval_data_partitions if args.eval_data else None)
     
 
 if __name__ == "__main__":

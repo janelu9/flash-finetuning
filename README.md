@@ -17,7 +17,7 @@ This step is optional but recommended especially when your data are too big to b
 Convert the raw data to token ids stored in parquet files.
 
 ```shell
-python convert_raw_to_ids.py \
+python -m jllm.convert_raw_to_ids \
     --tokenizer baichuan-inc/Baichuan-13B-Chat \
     -i news-commentary-v13-zh-en.txt \
     -o news-commentary-v13-zh-en_Baichuan-13B-Chat
@@ -31,7 +31,7 @@ Optional but recommended. The fewer partitions, the better shuffle, but the larg
 num_partition=2 && ./repartition.sh news-commentary-v13-zh-en_Baichuan-13B-Chat $num_partition
 ```
 
-***Note**: This shell script shuffles data by parquet file(a batch of samples), You can also use [Spark](https://spark.apache.org) to shuffle the data by sample but slowly.*
+***Note**: This script `repartition.sh` shuffles data by parquet file(a batch of samples), You can also use [Spark](https://spark.apache.org) to shuffle the data by sample but slowly.*
 
 ## Model Training
 
@@ -48,12 +48,20 @@ deepseed train_zero.py \
 ### Pipeline Parallelism
 
 ```shell
-deepseed train_pipe.py \
+deepseed --module jllm.train_pipe \
     --model baichuan-inc/Baichuan-13B-Chat \
     --train-data news-commentary-v13-zh-en_Baichuan-13B-Chat
 ```
 
 Generally, every GPU process reads one piece of data, that means one worker with 8 GPUs will need to allocate a total of 8x CPU memory for data.  But now they need just 1x if these GPUs belong to one pipeline under my special optimizations in this project . **I strongly recommend you to train your model with faster and low-cost Pipeline Parallelism** rather than ZERO. Pipeline engine could directly load and save model's weights in HuggingFace's format. It could also resume from the checkpoint. If you want to resume interruption, any configs related to training shouldn't be modified, otherwise it may load model's parameters only.
+
+#### Checkpoint Conversion
+
+Convert model's weights in checkpoint to HF format.
+
+```shell
+deepspeed --module jllm.convert_ckpt_to_hf --ckpt checkpoint
+```
 
 #### Supported Models
 
