@@ -6,7 +6,7 @@
 
 import torch
 import deepspeed
-from easyllm.ds_utils import (
+from easy_llm.utils import (
     print_rank_0,
     to_device,
     save_hf_format,
@@ -14,9 +14,8 @@ from easyllm.ds_utils import (
     get_all_reduce_mean,
     get_optimizer_grouped_parameters,
     save_zero_three_model,
-    load_hf_tokenizer,
-    get_train_ds_config)
-from easyllm.data.utils import (
+    load_hf_tokenizer,)
+from easy_llm.data import (
     shuffle_rank_0,
     PromptDataset,
     PromptDataCollator)
@@ -27,11 +26,12 @@ from transformers import (
     SchedulerType,
     default_data_collator,
     get_scheduler,)
-from easyllm.model.lora import (
+from easy_llm.model import (
     convert_linear_layer_to_lora,
     convert_lora_to_linear_layer,
     only_optimize_lora_parameters)
 # from transformers.deepspeed import HfDeepSpeedConfig
+from ds_utils import get_train_ds_config
 from deepspeed.ops.adam import DeepSpeedCPUAdam, FusedAdam
 from torch.utils.data import DataLoader
 from torch.utils.data.distributed import DistributedSampler
@@ -114,7 +114,7 @@ def main():
     ds_config['steps_per_print'] = args.steps_per_print
     set_random_seed(args.seed)
     if os.path.isfile(args.train_data) and args.global_rank == 0:
-        from convert_raw_to_ids import write_parquet
+        from easy_llm.data.convert_raw_to_ids import write_parquet
         cached_dir = os.path.splitext(os.path.basename(args.train_data))[0] + f"_{os.path.basename(args.model)}"
         write_parquet(args.train_data,cached_dir,args.model,MAX_SEQ_LENGTH=args.seq_length)
         args.train_data = cached_dir

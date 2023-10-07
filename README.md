@@ -4,10 +4,8 @@ Running Large Language Model easily, faster and low-cost.
 
 ## Installation
 
-Download the package from the release page on the right. Then:
-
 ```shell
-pip install ./easyllm-0.0.1.tar.gz
+pip install easy-llm
 ```
 
 ## Data Compression

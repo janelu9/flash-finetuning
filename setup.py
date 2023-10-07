@@ -1,6 +1,6 @@
 import setuptools
 
-project_name = "easyllm"  
+project_name = "easy_llm"  
 version = "0.0.1" 
  
 setuptools.setup(
