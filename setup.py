@@ -1,7 +1,8 @@
 import setuptools
+import io
 
 project_name = "jllm"  
-version = "0.0.1" 
+version = "0.1.0" 
  
 setuptools.setup(
     name=project_name,
@@ -14,7 +15,7 @@ setuptools.setup(
     project_urls={
         "Homepage": "https://github.com/janelu9/EasyLLM",
     },
-    long_description="README.md",
+    long_description=io.open("README.md", "r", encoding="utf-8").read(),
     long_description_content_type="text/markdown",
     classifiers=[
         "Programming Language :: Python :: 3.11",
