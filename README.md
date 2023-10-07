@@ -60,7 +60,9 @@ Generally, every GPU process reads one piece of data, that means one worker with
 Convert model's weights in checkpoint to HF format.
 
 ```shell
-deepspeed --module jllm.convert_ckpt_to_hf --ckpt checkpoint
+deepspeed --module jllm.convert_ckpt_to_hf \
+	--ckpt checkpoint \
+	--output_dir output
 ```
 
 #### Supported Models
