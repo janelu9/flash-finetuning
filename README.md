@@ -5,7 +5,7 @@ Running Large Language Model easily, faster and low-cost.
 ## Installation
 
 ```shell
-pip install easy-llm
+pip install jllm
 ```
 
 ## Data Compression
