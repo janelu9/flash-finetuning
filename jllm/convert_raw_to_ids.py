@@ -173,7 +173,7 @@ def write_parquet(filename,output_dir,tokenizer,MAX_SEQ_LENGTH=2048,dtype='qa',b
                                     partition_file % (i//batch_size), 
                                     compression=compression)
     del data_batch                                
-    os.system(f"echo '{i+1} {MAX_SEQ_LENGTH}' > {check_file}")
+    os.system(f"echo '{i+1} {MAX_SEQ_LENGTH} {batch_size} {len(keys)}' > {check_file}")
     print(f"{filename} stored in parquet with {i+1} samples")
     gc.collect()
     
@@ -184,7 +184,7 @@ if __name__=='__main__':
     parser.add_argument('-o', type=str, default="")
     parser.add_argument('-n', type=int, default=2**23)
     parser.add_argument('-c', type=str, default="gzip",choices=('gzip','brotli','snappy','lz4','zstd'))
-    parser.add_argument('--batch_size', type=int, default=2**15)
+    parser.add_argument('--batch_size', type=int, default=2**16)
     parser.add_argument('--seq-len', type=int, default=2**11)
     parser.add_argument('--cores', type=int, default=-1)
     parser.add_argument('--tokenizer', type=str, default="openlm-research/open_llama_13b")
