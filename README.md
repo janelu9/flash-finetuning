@@ -27,7 +27,7 @@ python -m jllm.convert_raw_to_ids \
 
 ### Shuffle
 
-If you have multiple datasets, you shouldn't skip this step. It could shuffle all the datasets globally by rows like [Spark](https://spark.apache.org) doing. Firstly, move all the datasets stored with parquet folders into one directory at first. such as `datasets`:
+If you have multiple datasets, you shouldn't skip this step. It could shuffle all the datasets globally by rows like [Spark](https://spark.apache.org) doing. Firstly, move all the datasets stored with parquet folders into one directory. such as `datasets`:
 
 ```shell
 datasets
