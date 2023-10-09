@@ -23,7 +23,7 @@ python -m jllm.convert_raw_to_ids \
     -o dataset0_Baichuan-13B-Chat
 ```
 
-***Note**: Samples of pre-train dataset should be separated by `'\n\n'` in text files and be the value of  field `'text'` in jsonl files. Fine-tune dataset's format should be `[{'system':content},{'user':content},{'assistant':content},...] ` in jsonl files.*
+***Note**: Samples of pre-train dataset should be separated by `'\n\n'` in text files and be the value of  field `'text'` in jsonl files. Fine-tune dataset's format should be `[{'system':content},{'user':content},{'assistant':content},...] ` in jsonl files, field `'system'` is not necessary.*
 
 ### Shuffle
 
@@ -115,7 +115,8 @@ deepseed train_zero.py \
 ```shell
 deepseed --module jllm.train_pipe \
     --model baichuan-inc/Baichuan-13B-Chat \
-    --train-data shuffled_datasets
+    --train-data shuffled_datasets \
+    --checkpoint_dir checkpoint
 ```
 
 Generally, every GPU process reads one piece of data, that means one worker with 8 GPUs will need to allocate a total of 8x CPU memory for data.  But now they need just 1x if these GPUs belong to one pipeline under my special optimizations in this project . **I strongly recommend you to train your model with faster and low-cost Pipeline Parallelism** rather than ZERO. Pipeline engine could directly load and save model's weights in HuggingFace's format. It could also resume from the checkpoint. If you want to resume interruption, any configs related to training shouldn't be modified, otherwise it may load model's parameters only.
