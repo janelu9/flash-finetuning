@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # coding: utf-8
 # Created on Thur Jun 29 09:36:49 2023
-# @author: Lu Jian
+# @author: Jian Lu
 # Email:janelu@live.cn;
 
 import torch

@@ -19,52 +19,54 @@ Convert the raw data to token ids stored in parquet files.
 ```shell
 python -m jllm.convert_raw_to_ids \
     --tokenizer baichuan-inc/Baichuan-13B-Chat \
-    -i news-commentary-v13-zh-en.txt \
-    -o news-commentary-v13-zh-en_Baichuan-13B-Chat
+    -i dataset0.jsonl \
+    -o dataset0_Baichuan-13B-Chat
 ```
+
+***Note**: Samples of pre-train dataset should be separated by `'\n\n'` in text files and be the value of  field `'text'` in jsonl files. Fine-tune dataset's format should be `[{'system':content},{'user':content},{'assistant':content},...] ` in jsonl files.*
 
 ### Shuffle
 
-If you have multiple datasets, you shouldn't skip this step. It could shuffle all the datasets globally by rows like Spark doing. Moving all the datasets  stored with parquet folders into one directory. such as `datasets`:
+If you have multiple datasets, you shouldn't skip this step. It could shuffle all the datasets globally by rows like [Spark](https://spark.apache.org) doing. Firstly, move all the datasets stored with parquet folders into one directory at first. such as `datasets`:
 
 ```shell
 datasets
-├── news-commentary-v13-en-zh_Baichuan-13B-Chat
-│   ├── news-commentary-v13-en-zh-part-00
-│   │   ├── news-commentary-v13-en-zh-part-00-part-00000.gzip.parquet
-│   │   └── news-commentary-v13-en-zh-part-00-part-00001.gzip.parquet
-│   └── news-commentary-v13-en-zh-part-01
-│       ├── news-commentary-v13-en-zh-part-01-part-00000.gzip.parquet
-│       └── news-commentary-v13-en-zh-part-01-part-00001.gzip.parquet
-└── news-commentary-v13-zh-en_Baichuan-13B-Chat
-    ├── news-commentary-v13-zh-en-part-00
-    │   ├── news-commentary-v13-zh-en-part-00-part-00000.gzip.parquet
-    │   └── news-commentary-v13-zh-en-part-00-part-00001.gzip.parquet
-    └── news-commentary-v13-zh-en-part-01
-        ├── news-commentary-v13-zh-en-part-01-part-00000.gzip.parquet
-        └── news-commentary-v13-zh-en-part-01-part-00001.gzip.parquet
+├── dataset0_Baichuan-13B-Chat
+│   ├── dataset0-00000
+│   │   ├── dataset0-00000-00000.gzip.parquet
+│   │   └── dataset0-00000-00001.gzip.parquet
+│   └── dataset0-00001
+│       ├── dataset0-00001-00000.gzip.parquet
+│       └── dataset0-00001-00001.gzip.parquet
+└── dataset1_Baichuan-13B-Chat
+    ├── dataset1-00000
+    │   ├── dataset1-00000-00000.gzip.parquet
+    │   └── dataset1-00000-00001.gzip.parquet
+    └── dataset1-00001
+        ├── dataset1-00001-00000.gzip.parquet
+        └── dataset1-00001-00001.gzip.parquet
 ```
 
-Then run:
+Then run the following command to shuffle the rows in each dataset:
 
 ```shell
 python -m jllm.shuffle_partition -d datasets --output shuffled_datasets
 ```
 
-Every dataset would be shuffled and placed in `shuffled_datasets`:
+Every dataset would be shuffled and placed in `shuffled_datasets` with new partitions:
 
 ```shell
-shuffled_datasets
-├── news-commentary-v13-en-zh_Baichuan-13B-Chat-part-000
-│   ├── news-commentary-v13-en-zh_Baichuan-13B-Chat-part-000-part-00000.gzip.parquet
-│   ├── news-commentary-v13-en-zh_Baichuan-13B-Chat-part-000-part-00001.gzip.parquet
-│   ├── news-commentary-v13-en-zh_Baichuan-13B-Chat-part-000-part-00002.gzip.parquet
-│   └── news-commentary-v13-en-zh_Baichuan-13B-Chat-part-000-part-00003.gzip.parquet
-└── news-commentary-v13-zh-en_Baichuan-13B-Chat-part-000
-    ├── news-commentary-v13-zh-en_Baichuan-13B-Chat-part-000-part-00000.gzip.parquet
-    ├── news-commentary-v13-zh-en_Baichuan-13B-Chat-part-000-part-00001.gzip.parquet
-    ├── news-commentary-v13-zh-en_Baichuan-13B-Chat-part-000-part-00002.gzip.parquet
-    └── news-commentary-v13-zh-en_Baichuan-13B-Chat-part-000-part-00003.gzip.parquet
+shuffled_datasets/
+├── dataset0_Baichuan-13B-Chat-00000
+│   ├── dataset0_Baichuan-13B-Chat-00000-00000.gzip.parquet
+│   ├── dataset0_Baichuan-13B-Chat-00000-00001.gzip.parquet
+│   ├── dataset0_Baichuan-13B-Chat-00000-00002.gzip.parquet
+│   └── dataset0_Baichuan-13B-Chat-00000-00003.gzip.parquet
+└── dataset1_Baichuan-13B-Chat-00000
+    ├── dataset1_Baichuan-13B-Chat-00000-00000.gzip.parquet
+    ├── dataset1_Baichuan-13B-Chat-00000-00001.gzip.parquet
+    ├── dataset1_Baichuan-13B-Chat-00000-00002.gzip.parquet
+    └── dataset1_Baichuan-13B-Chat-00000-00003.gzip.parquet
 ```
 
 ### Repartition 
@@ -75,24 +77,26 @@ Optional but recommended. 1B token ids in parquet files take up to 2G of hard di
 num_partition=4 && ./repartition.sh shuffled_datasets $num_partition
 ```
 
+You will get:
+
 ```shell
-shuffled_datasets
-├── 1e92b2c29058dd3b01-part-00000
-│   ├── news-commentary-v13-en-zh_Baichuan-13B-Chat-part-000-part-00000.gzip.parquet
-│   └── news-commentary-v13-zh-en_Baichuan-13B-Chat-part-000-part-00000.gzip.parquet
-├── 1e92b2c29058dd3b01-part-00001
-│   ├── news-commentary-v13-en-zh_Baichuan-13B-Chat-part-000-part-00001.gzip.parquet
-│   └── news-commentary-v13-zh-en_Baichuan-13B-Chat-part-000-part-00001.gzip.parquet
-├── 1e92b2c29058dd3b01-part-00002
-│   ├── news-commentary-v13-en-zh_Baichuan-13B-Chat-part-000-part-00002.gzip.parquet
-│   └── news-commentary-v13-zh-en_Baichuan-13B-Chat-part-000-part-00002.gzip.parquet
-├── 1e92b2c29058dd3b01-part-00003
-│   ├── news-commentary-v13-en-zh_Baichuan-13B-Chat-part-000-part-00003.gzip.parquet
-│   └── news-commentary-v13-zh-en_Baichuan-13B-Chat-part-000-part-00003.gzip.parquet
+shuffled_datasets/
+├── 5984729befe338e6a7-part-00000
+│   ├── dataset0_Baichuan-13B-Chat-00000-00000.gzip.parquet
+│   └── dataset1_Baichuan-13B-Chat-00000-00000.gzip.parquet
+├── 5984729befe338e6a7-part-00001
+│   ├── dataset0_Baichuan-13B-Chat-00000-00001.gzip.parquet
+│   └── dataset1_Baichuan-13B-Chat-00000-00001.gzip.parquet
+├── 5984729befe338e6a7-part-00002
+│   ├── dataset0_Baichuan-13B-Chat-00000-00002.gzip.parquet
+│   └── dataset1_Baichuan-13B-Chat-00000-00002.gzip.parquet
+├── 5984729befe338e6a7-part-00003
+│   ├── dataset0_Baichuan-13B-Chat-00000-00003.gzip.parquet
+│   └── dataset1_Baichuan-13B-Chat-00000-00003.gzip.parquet
 └── data.info
 ```
 
-***Note**: You can also use [Spark](https://spark.apache.org) to shuffle the data if you have and want.*
+***Note**: You can also use Spark to shuffle the data if you have and want.*
 
 ## Model Training
 
@@ -123,7 +127,7 @@ Convert model's weights in checkpoint to HF format.
 ```shell
 deepspeed --module jllm.convert_ckpt_to_hf \
 	--ckpt checkpoint \
-	--output_dir Baichuan-13B-Chat-Fintune
+	--output_dir Baichuan-13B-Chat-Finetune
 ```
 
 #### Supported Models
@@ -141,7 +145,7 @@ deepspeed --module jllm.convert_ckpt_to_hf \
 
 ```shell
 python batch_infer.py \
-    --model Baichuan-13B-Chat-Fintune \
+    --model Baichuan-13B-Chat-Finetune \
     --prompt-file prompt.txt
 ```
 
@@ -150,7 +154,7 @@ python batch_infer.py \
 Start the server:
 
 ```shell
-python server.py --model Baichuan-13B-Chat-Fintune
+python server.py --model Baichuan-13B-Chat-Finetune
 ```
 
 Query the model :

@@ -1,18 +1,17 @@
 #!/usr/bin/env python
 # coding: utf-8
 # Created on Thur Jun 29 09:36:49 2023
-# @author: Lu Jian
+# @author: Jian Lu
 # Email:janelu@live.cn;
 
 from functools import partial
 from transformers import AutoTokenizer,LlamaTokenizer
 from concurrent.futures import ThreadPoolExecutor,ProcessPoolExecutor
-from .data.utils import qa_inputs_generator
 import pyarrow.parquet
 import numpy as np
 import argparse
+import json
 import tqdm
-import re
 import os
 import gc
 
@@ -35,14 +34,21 @@ def wiki_generator(file,sep="\n\n"):
     with open(file,"r") as f:
         doc=""
         line = f.readline()
-        while line:
-            doc+=line
-            if doc[-2:]==sep or len(doc)>=SPLIT_LENGTH:
+        try:
+            while line:
+                doc = json.loads(line.strip())['text']
                 for block in split_doc(doc):
                     yield block
-                doc=""
-            line = f.readline()  
-        if doc:
+                line = f.readline()  
+        except:
+            while line:
+                doc+=line
+                if doc[-2:]==sep or len(doc)>=SPLIT_LENGTH:
+                    for block in split_doc(doc):
+                        yield block
+                    doc=""
+                line = f.readline()  
+            if doc:
                 for block in split_doc(doc):
                     yield block
             
@@ -72,10 +78,11 @@ def qa_generator(file):
             line = f.readline()
 
 def token_qa(file,tokenizer,MAX_SEQ_LENGTH,ROLE = {},PREFIX = []):
+    from .data.utils import qa_inputs_generator
     for sample in qa_generator(file):
-        inp_anses = sample.strip().split("\t") # example data format: Input\tAnswer, modify by your will.
-        if len(inp_anses) > 1:
-            msgs = PREFIX + [{"user":content} if i%2 == 0 else {"assistant":content} for i,content in enumerate(inp_anses)]
+        pmt_anses = json.loads(sample.strip())
+        if len(pmt_anses) > 1:
+            msgs = (PREFIX + pmt_anses) if 'system' not in pmt_anses[0] else pmt_anses
             ids = []; divide = []; pre_k = "assistant"
             for msg in msgs:
                 k,v = next(iter(msg.items()))
@@ -150,7 +157,7 @@ def write_parquet(filename,output_dir,tokenizer,MAX_SEQ_LENGTH=2048,dtype='qa',b
     item_iter = token(filename,tokenizer,MAX_SEQ_LENGTH)
     file = os.path.splitext(os.path.basename(filename))[0]
     partition_dir = os.path.join(output_dir , file)
-    partition_file = os.path.join(partition_dir , f"{file}-part-%05d.{compression}.parquet")
+    partition_file = os.path.join(partition_dir , f"{file}-%05d.{compression}.parquet")
     check_file = os.path.join(output_dir , "." + file + ".crc")
     if os.path.exists(check_file):
         print(f"{filename} converted, continue!")
@@ -202,7 +209,7 @@ if __name__=='__main__':
         if not os.path.exists(tmp) or args.C:
             os.system(f" rm -rf {tmp}") 
             os.makedirs(tmp)
-            os.system(f"cd {tmp};split -d -{args.n} ../{file} {file_name}-part-;cd -;")
+            os.system(f"cd {tmp};split -d -a 5 -{args.n} ../{file} {file_name}-;cd -;")
     else:
         tmp = source
     output_dir = args.o if args.o !="" else os.path.join(source_dir,file_name+f"_{os.path.basename(args.tokenizer)}")
