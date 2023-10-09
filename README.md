@@ -105,15 +105,15 @@ Here are two training examples.
 ### ZERO
 
 ```shell
-deepseed train_zero.py \
+deepspeed train_zero.py \
     --model openlm-research/open_llama_13b \
-    --train-data news-commentary-v13-zh-en.txt
+    --train-data dataset0.jsonl
 ```
 
 ### Pipeline Parallelism
 
 ```shell
-deepseed --module jllm.train_pipe \
+deepspeed --module jllm.train_pipe \
     --model baichuan-inc/Baichuan-13B-Chat \
     --train-data shuffled_datasets \
     --checkpoint_dir checkpoint

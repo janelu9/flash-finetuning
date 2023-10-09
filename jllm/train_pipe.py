@@ -112,7 +112,7 @@ parser.add_argument('--steps_per_print',
                     help='steps per print')
 parser.add_argument('--steps_per_eval',
                     type=int,
-                    default=100,
+                    default=-1,
                     help='steps per eval')
 parser.add_argument('--steps_per_checkpoint',
                     type=int,
@@ -186,20 +186,24 @@ def main(args):
     set_random_seed(args.seed)
     if args.checkpoint_dir and not os.path.exists(args.checkpoint_dir) and args.global_rank ==0: 
         os.system(f"mkdir -p {args.checkpoint_dir}")
-    if os.path.isfile(args.train_data) and args.global_rank ==0:
-        from .convert_raw_to_ids import write_parquet
-        cached_dir = os.path.splitext(os.path.basename(args.train_data))[0] + f"_{os.path.basename(args.model)}"
-        write_parquet(args.train_data,cached_dir,args.model,MAX_SEQ_LENGTH=args.seq_length)
-        args.train_data = cached_dir  
+    if os.path.isfile(args.train_data):
+        cached_dir = os.path.join(os.path.dirname(args.train_data),os.path.splitext(os.path.basename(args.train_data))[0] + f"_{os.path.basename(args.model)}")
+        if args.global_rank ==0:
+            from .convert_raw_to_ids import write_parquet
+            write_parquet(args.train_data,cached_dir,args.model,MAX_SEQ_LENGTH=args.seq_length)
+        torch.distributed.barrier()
+        args.train_data = cached_dir
     train_data_partitions = [os.path.join(args.train_data,f) for f in os.listdir(args.train_data) if os.path.isdir(os.path.join(args.train_data,f))]
     if args.eval_data:
-        if os.path.isfile(args.eval_data) and args.global_rank ==0:
-            from .convert_raw_to_ids import write_parquet
-            cached_dir = os.path.splitext(os.path.basename(args.eval_data))[0] + f"_{os.path.basename(args.model)}"
-            write_parquet(args.eval_data,cached_dir,args.model,MAX_SEQ_LENGTH=args.seq_length)
+        if os.path.isfile(args.eval_data):
+            cached_dir = os.path.join(os.path.dirname(args.eval_data),os.path.splitext(os.path.basename(args.eval_data))[0] + f"_{os.path.basename(args.model)}")
+            if args.global_rank ==0: 
+                from .convert_raw_to_ids import write_parquet
+                write_parquet(args.eval_data,cached_dir,args.model,MAX_SEQ_LENGTH=args.seq_length)
+            torch.distributed.barrier()
             args.eval_data = cached_dir
         eval_data_partitions = [os.path.join(args.eval_data,f) for f in os.listdir(args.eval_data) if os.path.isdir(os.path.join(args.eval_data,f))]   
-    torch.distributed.barrier()
+
     try:
         config = AutoConfig.from_pretrained(args.model,trust_remote_code=True)
     except:
