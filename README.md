@@ -17,7 +17,7 @@ This step is optional but recommended especially when your data are too big to b
 Convert the raw data to token ids stored in parquet files.
 
 ```shell
-python -m jllm.convert_raw_to_ids \
+python -m jllm.raw_to_ids \
     --tokenizer baichuan-inc/Baichuan-13B-Chat \
     -i dataset0.jsonl \
     -o dataset0_Baichuan-13B-Chat
@@ -52,7 +52,7 @@ datasets
 Then run the following command to shuffle the rows inner each dataset and distribute them to new partitions:
 
 ```shell
-python -m jllm.shuffle_partition -d datasets --output shuffled_datasets
+python -m jllm.shuffle_partitions -d datasets --output shuffled_datasets
 ```
 
 Every dataset would be shuffled and placed in `shuffled_datasets` with new partitions:
@@ -76,7 +76,7 @@ shuffled_datasets/
 Optional but recommended. 1B token ids in parquet files take up to 2G of hard disk at most but require approximately 10G of CPU memory. Setting `num_partition` according to the CPU memory of each worker.
 
 ```shell
-python -m jllm.repartition -datasets shuffled_datasets -n 4
+python -m jllm.repartition --datasets shuffled_datasets -n 4
 ```
 
 The datasets will be:
@@ -109,7 +109,7 @@ Here are two training examples.
 ```shell
 deepspeed train_zero.py \
     --model openlm-research/open_llama_13b \
-    --train-data dataset0.jsonl
+    --train_data dataset0.jsonl
 ```
 
 ### Pipeline Parallelism
@@ -117,7 +117,7 @@ deepspeed train_zero.py \
 ```shell
 deepspeed --module jllm.train_pipe \
     --model baichuan-inc/Baichuan-13B-Chat \
-    --train-data shuffled_datasets \
+    --train_data shuffled_datasets \
     --checkpoint checkpoint
 ```
 
@@ -128,7 +128,17 @@ Generally, every GPU process reads one piece of data, that means one worker with
 Convert model's weights in checkpoint to HF format.
 
 ```shell
-deepspeed --module jllm.convert_ckpt_to_hf \
+deepspeed --module jllm.ckpt_to_hf \
+	--model baichuan-inc/Baichuan-13B-Chat \
+	--ckpt checkpoint \
+	--hf Baichuan-13B-Chat-Finetune
+```
+
+If your model don't have any `lora` weights, you can also convert the checkpoint without GPUs by:
+
+```
+python -m jllm.nolora_ckpt_to_hf \
+	--model baichuan-inc/Baichuan-13B-Chat \
 	--ckpt checkpoint \
 	--hf Baichuan-13B-Chat-Finetune
 ```
@@ -151,7 +161,7 @@ vLLm is quoted here for Inference.
 ```shell
 python batch_infer.py \
     --model Baichuan-13B-Chat-Finetune \
-    --prompt-file prompt.txt
+    --prompt_file prompt.txt
 ```
 
 ## API Server

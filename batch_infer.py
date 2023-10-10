@@ -6,9 +6,9 @@ from transformers.generation.utils import GenerationConfig
 if __name__ =="__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--model", type=str, default="baichuan-inc/Baichuan-13B-Chat")
-    parser.add_argument("--prompt-file", type=str,help='Prompt text file')
+    parser.add_argument("--prompt_file", type=str,help='Prompt text file')
     parser.add_argument("--bacth_size", type=int, default=2)
-    parser.add_argument("--output-file", type=str, default="result.txt")
+    parser.add_argument("--output_file", type=str, default="result.txt")
     args = parser.parse_args()
     tokenizer = AutoTokenizer.from_pretrained(args.model, use_fast=False, trust_remote_code=True)
     generation_config = GenerationConfig.from_pretrained(args.model)

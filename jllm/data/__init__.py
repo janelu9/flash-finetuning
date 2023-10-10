@@ -8,5 +8,6 @@ from .utils import (
     PromptDataset,
     PromptDataCollatorPipe,
     PromptDataCollator,
-    qa_inputs_generator
+    qa_inputs_generator,
+    shuffle_partitons
 )

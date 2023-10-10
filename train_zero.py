@@ -49,7 +49,7 @@ parser.add_argument("--model",
                     type=str,
                     default= "openlm-research/open_llama_13b",
                     help="huggingface's model path")
-parser.add_argument("--train-data",
+parser.add_argument("--train_data",
                     type=str,
                     default= "",
                     help="data for training") 
@@ -114,7 +114,7 @@ def main():
     ds_config['steps_per_print'] = args.steps_per_print
     set_random_seed(args.seed)
     if os.path.isfile(args.train_data) and args.global_rank == 0:
-        from jllm.data.convert_raw_to_ids import write_parquet
+        from jllm import write_parquet
         cached_dir = os.path.splitext(os.path.basename(args.train_data))[0] + f"_{os.path.basename(args.model)}"
         write_parquet(args.train_data,cached_dir,args.model,MAX_SEQ_LENGTH=args.seq_length)
         args.train_data = cached_dir
