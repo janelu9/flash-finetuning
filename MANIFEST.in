@@ -1,4 +1,4 @@
 include LICENSE
 include requirements.txt
 
-recursive-include jllm *.so
+recursive-include jllm *
