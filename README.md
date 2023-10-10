@@ -76,7 +76,7 @@ shuffled_datasets/
 Optional but recommended. 1B token ids in parquet files take up to 2G of hard disk at most but require approximately 10G of CPU memory. Setting `num_partition` according to the CPU memory of each worker.
 
 ```shell
-num_partition=4 && ./repartition.sh shuffled_datasets $num_partition
+python -m jllm.repartition -datasets shuffled_datasets -n 4
 ```
 
 The datasets will be:
@@ -118,7 +118,7 @@ deepspeed train_zero.py \
 deepspeed --module jllm.train_pipe \
     --model baichuan-inc/Baichuan-13B-Chat \
     --train-data shuffled_datasets \
-    --checkpoint_dir checkpoint
+    --checkpoint checkpoint
 ```
 
 Generally, every GPU process reads one piece of data, that means one worker with 8 GPUs will need to allocate a total of 8x CPU memory for data.  But now they need just 1x if these GPUs belong to one pipeline under my special optimizations in this project . **I strongly recommend you to train your model with faster and low-cost Pipeline Parallelism** rather than ZERO. Pipeline engine could directly load and save model's weights in HuggingFace's format. It could also resume from the checkpoint. If you want to resume interruption, any configs related to training shouldn't be modified, otherwise it may load model's parameters only.
@@ -130,7 +130,7 @@ Convert model's weights in checkpoint to HF format.
 ```shell
 deepspeed --module jllm.convert_ckpt_to_hf \
 	--ckpt checkpoint \
-	--output_dir Baichuan-13B-Chat-Finetune
+	--hf Baichuan-13B-Chat-Finetune
 ```
 
 #### Supported Models
