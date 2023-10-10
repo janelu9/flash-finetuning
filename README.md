@@ -146,6 +146,8 @@ deepspeed --module jllm.convert_ckpt_to_hf \
 
 ## Batch Inference
 
+vLLm is quoted here for Inference.
+
 ```shell
 python batch_infer.py \
     --model Baichuan-13B-Chat-Finetune \
