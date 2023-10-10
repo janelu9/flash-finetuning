@@ -8,7 +8,7 @@ Running Large Language Model easily, faster and low-cost.
 pip install jllm
 ```
 
-## Data Compression
+## Data Handling
 
 This step is optional but recommended especially when your data are too big to be loaded to CPU memory at once.
 
@@ -23,11 +23,13 @@ python -m jllm.convert_raw_to_ids \
     -o dataset0_Baichuan-13B-Chat
 ```
 
-***Note**: Samples of pre-train dataset should be separated by `'\n\n'` in text files and be the value of  field `'text'` in jsonl files. Fine-tune dataset's format should be `[{'system':content},{'user':content},{'assistant':content},...] ` in jsonl files, field `'system'` is not necessary.*
+***Note**: Samples of pre-train dataset should be separated by `'\n\n'` in text files or be the value of  key`'text'` in jsonl files. Fine-tune dataset's format should be `[{'system':content},{'user':content},{'assistant':content},...] ` in jsonl files, key`'system'` is not necessary.*
 
 ### Shuffle
 
-If you have multiple datasets, you shouldn't skip this step. It could shuffle all the datasets globally by rows like [Spark](https://spark.apache.org) doing. Firstly, move all the datasets stored with parquet folders into one directory. such as `datasets`:
+If you have multiple datasets, you shouldn't skip this step. It could shuffle all the datasets globally by rows like [Spark](https://spark.apache.org) doing. 
+
+Firstly, move all the datasets stored in parquet folders into one directory. such as `datasets`:
 
 ```shell
 datasets
@@ -47,7 +49,7 @@ datasets
         └── dataset1-00001-00001.gzip.parquet
 ```
 
-Then run the following command to shuffle the rows in each dataset:
+Then run the following command to shuffle the rows inner each dataset and distribute them to new partitions:
 
 ```shell
 python -m jllm.shuffle_partition -d datasets --output shuffled_datasets
@@ -77,7 +79,7 @@ Optional but recommended. 1B token ids in parquet files take up to 2G of hard di
 num_partition=4 && ./repartition.sh shuffled_datasets $num_partition
 ```
 
-You will get:
+The datasets will be:
 
 ```shell
 shuffled_datasets/

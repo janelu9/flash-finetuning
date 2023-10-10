@@ -118,13 +118,13 @@ parser.add_argument('--steps_per_checkpoint',
                     type=int,
                     default=-1,
                     help='steps per checkpoint')
-parser.add_argument("--checkpoint_dir",
+parser.add_argument("--checkpoint",
                     type=str,
                     default= "",
                     help="checkpoint dir")
 parser.add_argument('--max_num_checkpoints',
                     type=int,
-                    default=-1,
+                    default=1,
                     help='max checkpoint num')
 parser.add_argument('--no_gradient_checkpointing',
                     action='store_true',
@@ -184,8 +184,8 @@ def main(args):
         'train_batch_size'] = args.per_device_train_batch_size*args.gradient_accumulation_steps*args.data_parallel_size
     ds_config['steps_per_print'] = args.steps_per_print
     set_random_seed(args.seed)
-    if args.checkpoint_dir and not os.path.exists(args.checkpoint_dir) and args.global_rank ==0: 
-        os.system(f"mkdir -p {args.checkpoint_dir}")
+    if args.checkpoint and not os.path.exists(args.checkpoint) and args.global_rank ==0: 
+        os.system(f"mkdir -p {args.checkpoint}")
     if os.path.isfile(args.train_data):
         cached_dir = os.path.join(os.path.dirname(args.train_data),os.path.splitext(os.path.basename(args.train_data))[0] + f"_{os.path.basename(args.model)}")
         if args.global_rank ==0:

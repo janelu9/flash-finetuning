@@ -56,7 +56,7 @@ parser.add_argument("--lora_module_name",
 parser.add_argument('--only_optimize_lora',
                     action='store_true',
                     help='Only optimize the LoRA parameters.')
-parser.add_argument("--output_dir",
+parser.add_argument("--hf",
                     type=str,
                     default="output",
                     help="Where to store the model.")
@@ -106,7 +106,7 @@ def main():
         else:
             _,ckpt_config=engine.load_checkpoint(args.ckpt,tag=args.tag,load_module_only=True)
         engine.eval()
-        convert_lora_to_linear_layer(engine.module).save_pretrained(args.output_dir)
+        convert_lora_to_linear_layer(engine.module).save_pretrained(args.hf)
 
 if __name__ == "__main__":
     main()
