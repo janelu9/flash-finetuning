@@ -134,10 +134,10 @@ parser.add_argument('--max_num_checkpoints',
                     type=int,
                     default=1,
                     help='max checkpoint num')
-parser.add_argument('--early_stop_steps',
+parser.add_argument('--early_stop',
                     type=int,
                     default=-1,
-                    help='if eval loss continuous rebound steps == early_stop_steps, training will be breaked')              
+                    help='if eval loss continuous rebound epoches == early_stop, training will be breaked')              
 parser.add_argument('--no_gradient_checkpointing',
                     action='store_true',
                     help='Enable gradient checkpointing for model.')
@@ -165,7 +165,7 @@ parser.add_argument('--only_optimize_lora',
 parser = deepspeed.add_config_arguments(parser)
 args=parser.parse_args()
 get_train_ds_config = importlib.import_module(os.path.splitext(args.ds_config)[0]).get_train_ds_config
-assert args.early_stop_steps != 0
+assert args.early_stop != 0
 assert args.max_num_checkpoints != 0
 assert args.best_of>0
 if args.max_num_checkpoints<0:args.best_of=1

@@ -49,13 +49,13 @@ datasets
         └── dataset1-00001-00001.gzip.parquet
 ```
 
-Then run the following command to shuffle the rows inner each dataset and distribute them to new partitions:
+Then run the following command to shuffle the rows inner each dataset and distribute them to new blocks, `num_block` is recommended to be the multiple of next step's repartition number.
 
 ```shell
-python -m jllm.shuffle_partitions -d datasets --output shuffled_datasets
+python -m jllm.shuffle_partitions -d datasets --output shuffled_datasets --num_block 4
 ```
 
-Every dataset would be shuffled and placed in `shuffled_datasets` with new partitions:
+Every dataset would be shuffled and placed in `shuffled_datasets` with several times of `num_block` parquet files:
 
 ```shell
 shuffled_datasets/
