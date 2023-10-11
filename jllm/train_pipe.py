@@ -102,7 +102,7 @@ parser.add_argument("--learning_rate",
                     type=float,
                     default=3e-4,
                     help= "Initial learning rate (after the potential warmup period) to use.",)
-parser.add_argument('--seq_length',
+parser.add_argument('--seq_len',
                     type=int,
                     default=2048,
                     help='max seq len')
@@ -122,6 +122,14 @@ parser.add_argument("--checkpoint",
                     type=str,
                     default= "",
                     help="checkpoint dir")
+parser.add_argument('--best_of',
+                    type=int,
+                    default=1,
+                    help='checkpoint top k of eval_loss')
+parser.add_argument('--ckpt_epoch',
+                    type=str,
+                    default=None,
+                    help='checkpoint the given epoches')
 parser.add_argument('--max_num_checkpoints',
                     type=int,
                     default=1,
@@ -129,7 +137,7 @@ parser.add_argument('--max_num_checkpoints',
 parser.add_argument('--early_stop_steps',
                     type=int,
                     default=-1,
-                    help='if eval loss continuous rebound steps == early_stop_steps, training will be breaked')
+                    help='if eval loss continuous rebound steps == early_stop_steps, training will be breaked')              
 parser.add_argument('--no_gradient_checkpointing',
                     action='store_true',
                     help='Enable gradient checkpointing for model.')
@@ -158,6 +166,12 @@ parser = deepspeed.add_config_arguments(parser)
 args=parser.parse_args()
 get_train_ds_config = importlib.import_module(os.path.splitext(args.ds_config)[0]).get_train_ds_config
 assert args.early_stop_steps != 0
+assert args.max_num_checkpoints != 0
+assert args.best_of>0
+if args.max_num_checkpoints<0:args.best_of=1
+args.ckpt_epoch = set(map(int,args.ckpt_epoch.split(','))) if args.ckpt_epoch else set()
+args.max_num_checkpoints = (max(args.best_of,args.max_num_checkpoints)+len(args.ckpt_epoch)) if args.max_num_checkpoints>0 else -1
+
 try:
     import flash_attn
     import xformers
@@ -194,7 +208,7 @@ def main(args):
         cached_dir = os.path.join(os.path.dirname(args.train_data),os.path.splitext(os.path.basename(args.train_data))[0] + f"_{os.path.basename(args.model)}")
         if args.global_rank ==0:
             from .raw_to_ids import write_parquet
-            write_parquet(args.train_data,cached_dir,args.model,MAX_SEQ_LENGTH=args.seq_length)
+            write_parquet(args.train_data,cached_dir,args.model,MAX_SEQ_LENGTH=args.seq_len)
         torch.distributed.barrier()
         args.train_data = cached_dir
     train_data_partitions = [os.path.join(args.train_data,f) for f in os.listdir(args.train_data) if os.path.isdir(os.path.join(args.train_data,f))]
@@ -203,7 +217,7 @@ def main(args):
             cached_dir = os.path.join(os.path.dirname(args.eval_data),os.path.splitext(os.path.basename(args.eval_data))[0] + f"_{os.path.basename(args.model)}")
             if args.global_rank ==0: 
                 from .raw_to_ids import write_parquet
-                write_parquet(args.eval_data,cached_dir,args.model,MAX_SEQ_LENGTH=args.seq_length)
+                write_parquet(args.eval_data,cached_dir,args.model,MAX_SEQ_LENGTH=args.seq_len)
             torch.distributed.barrier()
             args.eval_data = cached_dir
         eval_data_partitions = [os.path.join(args.eval_data,f) for f in os.listdir(args.eval_data) if os.path.isdir(os.path.join(args.eval_data,f))]   

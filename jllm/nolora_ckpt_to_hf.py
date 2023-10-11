@@ -34,7 +34,7 @@ if __name__=='__main__':
     pipe2hf = ModelPipe[config.model_type].get_pipe2hf(config.num_hidden_layers)
     def convert_ckpt2hf(meta_data,layer_files,pipe2hf,num_stages):
         stage_id,meta_data = meta_data
-        cur_layer_nums = {int(k.split(".",1)[0]) for k in meta_data['param_shapes'][0].keys()}
+        cur_layer_nums = {int(k.split(".",1)[0]) for dk in meta_data['param_shapes'] for k in dk.keys() }
         cur_layers  = [(int(l[6:].split('-',1)[0]),l) for l in layer_files if int(l[6:].split('-',1)[0]) in cur_layer_nums]
         cur_state_dict ={}
         for i,layer in tqdm.tqdm(cur_layers):

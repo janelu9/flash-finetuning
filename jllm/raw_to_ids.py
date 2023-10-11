@@ -192,7 +192,7 @@ if __name__=='__main__':
     parser.add_argument('-n', type=int, default=2**23)
     parser.add_argument('-c', type=str, default="gzip",choices=('gzip','brotli','snappy','lz4','zstd'))
     parser.add_argument('--batch_size', type=int, default=2**16)
-    parser.add_argument('--seq-len', type=int, default=2**11)
+    parser.add_argument('--seq_len', type=int, default=2**11)
     parser.add_argument('--cores', type=int, default=-1)
     parser.add_argument('--tokenizer', type=str, default="openlm-research/open_llama_13b")
     parser.add_argument('--tmp', type=str, default="tmp")
