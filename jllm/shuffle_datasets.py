@@ -1,5 +1,5 @@
 import argparse
-from .data import shuffle_partitons
+from .data import shuffle_datasets
 
 if __name__=='__main__':
     parser = argparse.ArgumentParser()
@@ -10,4 +10,4 @@ if __name__=='__main__':
     parser.add_argument('--mem_rate', type=float, default=0.8,help="usage rate of memory.")
     parser.add_argument("--seed",type=int,default=1234, help="A seed for shuffle.")
     args = parser.parse_args()
-    shuffle_partitons(args)
+    shuffle_datasets(args)

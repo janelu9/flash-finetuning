@@ -52,7 +52,7 @@ datasets
 Then run the following command to shuffle the rows inner each dataset and distribute them to new blocks, `num_block` is recommended to be the multiple of next step's repartition number.
 
 ```shell
-python -m jllm.shuffle_partitions -d datasets --output shuffled_datasets --num_block 4
+python -m jllm.shuffle_datasets -d datasets --output shuffled_datasets --num_block 4
 ```
 
 Every dataset would be shuffled and placed in `shuffled_datasets` with several times of `num_block` parquet files:
@@ -76,7 +76,7 @@ shuffled_datasets/
 Optional but recommended. 1B token ids in parquet files take up to 2G of hard disk at most but require approximately 10G of CPU memory. Setting `num_partition` according to the CPU memory of each worker.
 
 ```shell
-python -m jllm.repartition --datasets shuffled_datasets -n 4
+python -m jllm.repartition --datasets shuffled_datasets --num_partition 4
 ```
 
 The datasets will be:
