@@ -138,13 +138,14 @@ Convert model's weights in checkpoint to HF format.
 ```shell
 deepspeed --module jllm.ckpt_to_hf \
 	--model baichuan-inc/Baichuan-13B-Chat \
+	--pipe_parallel_size 8 \
 	--ckpt checkpoint \
 	--hf Baichuan-13B-Chat-Finetune
 ```
 
 If your model don't have any `lora` weights, you can also convert the checkpoint without GPUs by:
 
-```
+```shell
 python -m jllm.nolora_ckpt_to_hf \
 	--model baichuan-inc/Baichuan-13B-Chat \
 	--ckpt checkpoint \
