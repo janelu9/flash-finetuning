@@ -163,9 +163,11 @@ python -m jllm.nolora_ckpt_to_hf \
 
 ***Note**: The training speed of each model was measured on 64 NVIDIA A100-PCIE-40GB GPUs with data type of bfloat16 and batch token size of 4M(`batch_size*seq_length`).*
 
-## Batch Inference
+## Inference
 
 vLLm is quoted here for Inference.
+
+### Batch Inference
 
 ```shell
 python batch_infer.py \
@@ -173,7 +175,7 @@ python batch_infer.py \
     --prompt_file prompt.txt
 ```
 
-## API Server
+### API Server
 
 Start the server:
 

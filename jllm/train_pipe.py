@@ -246,13 +246,13 @@ def main(args):
             args.lora_dim)
         if args.only_optimize_lora:
             model = only_optimize_lora_parameters(model)
-
-    optimizer_grouped_parameters = get_optimizer_grouped_parameters(
-        model, args.weight_decay)
-    AdamOptimizer = DeepSpeedCPUAdam if args.offload else FusedAdam
-    optimizer = AdamOptimizer(optimizer_grouped_parameters,
-                              lr=args.learning_rate,
-                              betas=(0.9, 0.95))
+    if "optimizer" not in ds_config:
+        optimizer_grouped_parameters = get_optimizer_grouped_parameters(
+            model, args.weight_decay)
+        AdamOptimizer = DeepSpeedCPUAdam if args.offload else FusedAdam
+        optimizer = AdamOptimizer(optimizer_grouped_parameters,
+                                  lr=args.learning_rate,
+                                  betas=(0.9, 0.95))
                               
     '''
     How many folders, how many partitions. 
@@ -265,18 +265,19 @@ def main(args):
     num_update_steps_per_epoch = np.ceil(
         num_train_batch / args.gradient_accumulation_steps ) + len(train_data_partitions) - 1
     args.num_training_steps = int(args.num_train_epochs * num_update_steps_per_epoch)
-    lr_scheduler = get_scheduler(
-        name=args.lr_scheduler_type,
-        optimizer=optimizer,
-        num_warmup_steps=args.num_warmup_steps if args.num_warmup_steps >= 1 else int(args.num_warmup_steps * num_update_steps_per_epoch),
-        num_training_steps=args.num_training_steps)      
+    if 'scheduler' not in ds_config:
+        lr_scheduler = get_scheduler(
+            name=args.lr_scheduler_type,
+            optimizer=optimizer,
+            num_warmup_steps=args.num_warmup_steps if args.num_warmup_steps >= 1 else int(args.num_warmup_steps * num_update_steps_per_epoch),
+            num_training_steps=args.num_training_steps)      
     
     engine, *_ = deepspeed.initialize(
         args=args,
         config=ds_config,
         model=model,
-        optimizer=optimizer,
-        lr_scheduler=lr_scheduler,
+        optimizer=optimizer if "optimizer" not in ds_config else None,
+        lr_scheduler=lr_scheduler if "scheduler" not in ds_config else None,
         )
       
 

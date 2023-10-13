@@ -58,7 +58,7 @@ parser.add_argument('--only_optimize_lora',
                     help='Only optimize the LoRA parameters.')
 parser.add_argument("--hf",
                     type=str,
-                    default="output",
+                    default="",
                     help="Where to store the model.")
 parser = deepspeed.add_config_arguments(parser)
 
@@ -106,6 +106,9 @@ def main():
         else:
             _,ckpt_config=engine.load_checkpoint(args.ckpt,tag=args.tag,load_module_only=True)
         engine.eval()
+        if not args.tag: 
+            with open(os.path.join(args.ckpt,'latest')) as f: args.tag = f.read().strip()
+        args.hf = (args.ckpt+args.tag) if not args.hf else args.hf
         convert_lora_to_linear_layer(engine.module).save_pretrained(args.hf)
 
 if __name__ == "__main__":

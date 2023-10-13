@@ -13,11 +13,12 @@ if __name__=='__main__':
     parser.add_argument('--model', type=str, help="model path")
     parser.add_argument('--ckpt', type=str, help="checkpoint.")
     parser.add_argument('--tag', type=str, default=None, help="checkpoint tag")
-    parser.add_argument('--hf',type=str,default="output",help="Where to store the model.")
+    parser.add_argument('--hf',type=str,default="",help="Where to store the model.")
     args = parser.parse_args()
-    os.makedirs(args.hf,exist_ok=True)
     if not args.tag: 
         with open(os.path.join(args.ckpt,'latest')) as f: args.tag = f.read().strip()
+    args.hf = (args.ckpt+args.tag) if not args.hf else args.hf
+    os.makedirs(args.hf,exist_ok=True)
     ckpt_path =os.path.join(args.ckpt,args.tag)
     files = os.listdir(ckpt_path)
     device = torch.device('cpu')
@@ -49,3 +50,4 @@ if __name__=='__main__':
     with ProcessPoolExecutor(max_workers=num_stages) as exe:
         func = partial(convert_ckpt2hf,layer_files = layer_files,pipe2hf=pipe2hf,num_stages=num_stages)
         list(exe.map(func,meta_datas))
+    print("Done!")
