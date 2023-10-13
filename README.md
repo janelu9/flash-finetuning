@@ -123,6 +123,7 @@ deepspeed -H $HOSTFILE \
     --pipe_parallel_size 8 \
     --per_device_train_batch_size 2 \
     --gradient_accumulation_steps 32 \
+    --ds_config ds_config.py \
     --checkpoint checkpoint \
     --max_num_checkpoints 2
 ```
