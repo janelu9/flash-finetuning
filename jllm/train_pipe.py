@@ -51,6 +51,10 @@ parser.add_argument("--resume_ckpt",
                     type=str,
                     default= "",
                     help="ckpt dir to resume interruption")
+parser.add_argument('--tag',
+                    type=str,
+                    default=None,
+                    help='checkpoint tag')
 parser.add_argument("--ds_config",
                     type=str,
                     default= "ds_config.py",
