@@ -38,11 +38,11 @@ parser.add_argument("--model",
 parser.add_argument("--train_data",
                     type=str,
                     default= "",
-                    help="data for training")
+                    help="data for training,jsonl or parqet folder")
 parser.add_argument("--eval_data",
                     type=str,
                     default= "",
-                    help="data for evalution")
+                    help="data for evalution,jsonl or parqet folder")
 parser.add_argument("--from_ckpt",
                     type=str,
                     default= "",
@@ -140,7 +140,7 @@ parser.add_argument('--early_stop',
                     help='if eval loss continuous rebound epoches == early_stop, training will be breaked')              
 parser.add_argument('--no_gradient_checkpointing',
                     action='store_true',
-                    help='Enable gradient checkpointing for model.')
+                    help='disable gradient checkpointing for model.')
 parser.add_argument("--seed",
                     type=int,
                     default=1234,
