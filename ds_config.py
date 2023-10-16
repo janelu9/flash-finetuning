@@ -56,9 +56,9 @@ def get_train_ds_config(offload,
         # "fp16": {"enabled": True,"loss_scale_window": 1000},
         "bf16": {"enabled": True},
         # "optimizer": {
-            # "type": "Adam",
+            # "type": "AdamW",
             # "params": {
-              # "lr": 1e-4,
+              # "lr": 1e-5,
               # "betas": [
                 # 0.9,
                 # 0.95
@@ -68,11 +68,13 @@ def get_train_ds_config(offload,
             # }
           # },
         # "scheduler": {
-            # "type": "WarmupLR",
+            # "type": "WarmupDecayLR",
             # "params": {
-                # "warmup_min_lr": 0,
-                # "warmup_max_lr": 0.001,
-                # "warmup_num_steps": 100
+                # "warmup_min_lr": 1e-7,
+                # "warmup_max_lr": 1e-5,
+                # "warmup_num_steps": 300,
+                # "total_num_steps":10000,
+                # "warmup_type":'linear',
              # }
         # },
         "gradient_clipping": 1.0,
