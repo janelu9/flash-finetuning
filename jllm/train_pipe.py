@@ -26,6 +26,8 @@ import numpy as np
 import os
 import importlib
 import argparse
+import subprocess
+os.environ['PATH']+=":"+os.path.dirname(subprocess.check_output("which ninja", shell=True).decode())
 
 parser = argparse.ArgumentParser(description='My training script.')
 parser.add_argument('--local_rank', type=int, default=-1,

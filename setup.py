@@ -2,7 +2,7 @@ import setuptools
 import io
 
 project_name = "jllm"  
-version = "1.1.5" 
+version = "1.1.6" 
  
 setuptools.setup(
     name=project_name,
