@@ -231,8 +231,9 @@ def main(args):
     try:
         config = AutoConfig.from_pretrained(args.model,trust_remote_code=True)
     except:
-        config = AutoConfig.from_pretrained(args.model)
+        config = AutoConfig.from_pretrained(args.model) 
     torch.distributed.barrier()
+    
     topo = ProcessTopology(['data','model','pipe'], [args.data_parallel_size, args.model_parallel_size, args.pipe_parallel_size])
     args.seed = args.seed + topo.get_coord(args.global_rank).pipe
     model = ModelPipe[config.model_type](

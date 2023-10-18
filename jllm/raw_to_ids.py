@@ -175,7 +175,7 @@ def write_parquet(filename,output_dir,tokenizer,MAX_SEQ_LENGTH=2048,dtype='qa',b
             del data_batch
             gc.collect()
             data_batch={k:[] for k in keys}
-    if data_batch[k]:
+    if data_batch[keys[0]]:
         pyarrow.parquet.write_table(pyarrow.table([data_batch[k] for k in keys], names=keys),
                                     partition_file % (i//batch_size), 
                                     compression=compression)
