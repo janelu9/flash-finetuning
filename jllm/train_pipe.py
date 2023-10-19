@@ -181,11 +181,9 @@ args.max_num_checkpoints = (max(args.best_of,args.max_num_checkpoints)+len(args.
 try:
     import flash_attn
     import xformers
-    args.fast = True 
+    args.fast = True
 except:
     args.fast = False
-    
-
 
 def main(args):
     if args.local_rank == -1:
