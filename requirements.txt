@@ -8,3 +8,4 @@ xformers
 pyarrow
 tiktoken
 vllm
+git+https://gitee.com/janelu9/Megatron-DeepSpeed.git

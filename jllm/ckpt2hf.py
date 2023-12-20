@@ -81,9 +81,9 @@ def main():
     except:
         config = AutoConfig.from_pretrained(args.model)
     with torch.no_grad():
-        model = ModelPipe[config.model_type](
+        model = ModelPipe[config.architectures[0]](
             config,
-            loss_fn=CrossEntropyLossPipe[config.model_type](),
+            loss_fn=CrossEntropyLossPipe[config.architectures[0]](),
             topology=topo,
             # partition_method="type:DecoderLayer",
         )
@@ -108,7 +108,7 @@ def main():
         engine.eval()
         if not args.tag: 
             with open(os.path.join(args.ckpt,'latest')) as f: args.tag = f.read().strip()
-        args.hf = (args.ckpt+args.tag) if not args.hf else args.hf
+        args.hf = (args.ckpt+"_"+args.tag) if not args.hf else args.hf
         convert_lora_to_linear_layer(engine.module).save_pretrained(args.hf)
 
 if __name__ == "__main__":

@@ -128,25 +128,45 @@ parser.add_argument("--checkpoint",
                     type=str,
                     default= "",
                     help="checkpoint dir")
+parser.add_argument('--ckpt_step_gt',
+                    type=int,
+                    default=0,
+                    help='checkpoint steps >= ckpt_step_gt')
 parser.add_argument('--best_of',
                     type=int,
                     default=1,
                     help='checkpoint top k of eval_loss')
 parser.add_argument('--ckpt_epoch',
                     type=str,
-                    default=None,
+                    default="",
                     help='checkpoint the given epoches')
+parser.add_argument('--skip_epoch',
+                    type=str,
+                    default="",
+                    help='checkpoint except the given epoches')
 parser.add_argument('--max_num_checkpoints',
                     type=int,
                     default=1,
                     help='max checkpoint num')
+parser.add_argument('--only_ckpt_model',
+                    action='store_true',
+                    help='Only checkpoint the model parameters.')
 parser.add_argument('--early_stop',
                     type=int,
                     default=-1,
                     help='if eval loss continuous rebound epoches == early_stop, training will be breaked')              
 parser.add_argument('--no_gradient_checkpointing',
                     action='store_true',
-                    help='disable gradient checkpointing for model.')
+                    help='disable gradient checkpointing for decoder layer.')
+parser.add_argument('--gradient_checkpointing_head',
+                    action='store_true',
+                    help='enable gradient checkpointing for lm_head.')
+parser.add_argument('--low_mem',
+                    action='store_true',
+                    help='lower memory usage.')
+parser.add_argument('--no_shuf',
+                    action='store_true',
+                    help='disable shuffle at every epoch.')
 parser.add_argument("--seed",
                     type=int,
                     default=1234,
@@ -175,8 +195,6 @@ assert args.early_stop != 0
 assert args.max_num_checkpoints != 0
 assert args.best_of>0
 if args.max_num_checkpoints<0:args.best_of=1
-args.ckpt_epoch = set(map(int,args.ckpt_epoch.split(','))) if args.ckpt_epoch else set()
-args.max_num_checkpoints = (max(args.best_of,args.max_num_checkpoints)+len(args.ckpt_epoch)) if args.max_num_checkpoints>0 else -1
 
 try:
     import flash_attn
@@ -211,7 +229,7 @@ def main(args):
     if os.path.isfile(args.train_data):
         cached_dir = os.path.join(os.path.dirname(args.train_data),os.path.splitext(os.path.basename(args.train_data))[0] + f"_{os.path.basename(args.model)}")
         if args.global_rank ==0:
-            from .raw_to_ids import write_parquet
+            from .raw2ids import write_parquet
             write_parquet(args.train_data,cached_dir,args.model,MAX_SEQ_LENGTH=args.seq_len)
         torch.distributed.barrier()
         args.train_data = cached_dir
@@ -220,7 +238,7 @@ def main(args):
         if os.path.isfile(args.eval_data):
             cached_dir = os.path.join(os.path.dirname(args.eval_data),os.path.splitext(os.path.basename(args.eval_data))[0] + f"_{os.path.basename(args.model)}")
             if args.global_rank ==0: 
-                from .raw_to_ids import write_parquet
+                from .raw2ids import write_parquet
                 write_parquet(args.eval_data,cached_dir,args.model,MAX_SEQ_LENGTH=args.seq_len)
             torch.distributed.barrier()
             args.eval_data = cached_dir
@@ -229,20 +247,45 @@ def main(args):
     try:
         config = AutoConfig.from_pretrained(args.model,trust_remote_code=True)
     except:
-        config = AutoConfig.from_pretrained(args.model) 
+        config = AutoConfig.from_pretrained(args.model)
     torch.distributed.barrier()
     
-    topo = ProcessTopology(['data','model','pipe'], [args.data_parallel_size, args.model_parallel_size, args.pipe_parallel_size])
+    topo = ProcessTopology(['data','pipe','model'], [args.data_parallel_size, args.pipe_parallel_size, args.model_parallel_size])
     args.seed = args.seed + topo.get_coord(args.global_rank).pipe
-    model = ModelPipe[config.model_type](
-        config,
-        not args.no_gradient_checkpointing and not args.only_optimize_lora,
-        args.fast,
-        loss_fn=CrossEntropyLossPipe[config.model_type](),
-        topology=topo,
-        base_seed=args.seed,
-        # partition_method="type:DecoderLayer",
-        )
+    
+    if args.model_parallel_size > 1:
+        from jllm.core import parallel_state
+        parallel_state.initialize_model_parallel(args.model_parallel_size,args.pipe_parallel_size)
+        from megatron.core.model_parallel_config import ModelParallelConfig
+        parallel_config = ModelParallelConfig(tensor_model_parallel_size=args.model_parallel_size,
+                                              pipeline_model_parallel_size=args.pipe_parallel_size,
+                                              params_dtype=config.torch_dtype,
+                                              pipeline_dtype=config.torch_dtype
+                                             )
+        parallel_config.batch_size = args.per_device_train_batch_size
+        parallel_config.seq_length = int(open(os.path.join(args.train_data,[f for f in os.listdir(args.train_data) if f[-4:] == '.crc'][0])).read().split()[1])
+        parallel_config.low_mem = args.low_mem
+        from jllm.model import ModelParallel,ParallelCrossEntropy
+        model =  ModelParallel[config.architectures[0]](
+            config,
+            parallel_config=parallel_config,
+            loss_fn = ParallelCrossEntropy,
+            topology=topo,
+            base_seed=args.seed,
+            # partition_method="type:DecoderLayer",
+            )
+    else:
+        model = ModelPipe[config.architectures[0]](
+            config,
+            not args.no_gradient_checkpointing and not args.only_optimize_lora,
+            args.fast,
+            args.gradient_checkpointing_head,
+            loss_fn=CrossEntropyLossPipe[config.architectures[0]](alpha=config.alpha) if 'Mixed' in CrossEntropyLossPipe[config.architectures[0]].__name__ else CrossEntropyLossPipe[config.architectures[0]](),
+            topology=topo,
+            base_seed=args.seed,
+            # partition_method="type:DecoderLayer",
+            )
+        
     if not(args.resume_ckpt or args.from_ckpt): model.from_pretrained(args.model)
     
     if args.lora_dim > 0:

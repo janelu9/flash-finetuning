@@ -17,7 +17,7 @@ import gc
 
 IGNORE_TOKEN_ID: int = -100
 OVERLAPPING_LENGTH: int  = 1
-FILTER_LENGTH: int  = 128
+FILTER_LENGTH: int  = 8
 SPLIT_LENGTH: int = 65536
 
 def clean_wikitext(string):
@@ -80,29 +80,37 @@ def qa_generator(file):
 def token_qa(file,tokenizer,MAX_SEQ_LENGTH,ROLE = {},PREFIX = []):
     from .data.utils import qa_inputs_generator
     for sample in qa_generator(file):
-        pmt_anses = json.loads(sample.strip())
+        js = json.loads(sample.strip())
+        pmt_anses = js['conversation'] if 'conversation' in js else js
         if len(pmt_anses) > 1:
             msgs = (PREFIX + pmt_anses) if 'system' not in pmt_anses[0] else pmt_anses
-            ids = []; divide = []; pre_k = "assistant"
-            for msg in msgs:
+            ids = []; divide = [0]; 
+            for start,msg in enumerate(msgs):
+                k,v = next(iter(msg.items()))
+                if k != "assistant":
+                    ids.extend(ROLE[k] if k == 'system' or len(ROLE[k])==1 else ROLE[k][1:])
+                    ids.extend(tokenizer.encode(v))
+                    pre_k = k
+                    break
+
+            for msg in msgs[start+1:]:
                 k,v = next(iter(msg.items()))
                 if k != pre_k:
                     if k != "assistant":
-                        if ids:
-                            ids.append(tokenizer.eos_token_id)
+                        ids.append(tokenizer.im_end_id)
                         if pre_k != "system":
                             divide.append(len(ids))
                     ids.extend(ROLE[k])
                     if k == "assistant":
                         divide.append(len(ids))
                     ids.extend(tokenizer.encode(v))         
-                elif ids:
+                else:
                     ids.extend(tokenizer.encode(v))
                 pre_k = k
-                
+
             if k == "assistant":
-                ids.append(tokenizer.eos_token_id)
-                
+                ids.append(tokenizer.im_end_id)
+
             if len(divide)%2==1:
                 ids=ids[:divide[-1]]
             else:
@@ -115,45 +123,59 @@ def token_qa(file,tokenizer,MAX_SEQ_LENGTH,ROLE = {},PREFIX = []):
                                                      MAX_HISTORY_LENGTH = MAX_SEQ_LENGTH//2,
                                                      pad_token_id = tokenizer.pad_token_id,
                                                      IGNORE_TOKEN_ID = -100):
+                    if 'category' in js:
+                        qa_inputs.update({"prompt_len":divide[1],"classes":int(js['category'])})
                     yield qa_inputs
    
 def write_parquet(filename,output_dir,tokenizer,MAX_SEQ_LENGTH=2048,dtype='qa',batch_size=2**15,compression='gzip'):
     #tokenizer = LlamaTokenizer.from_pretrained(args.tokenizer,fast_tokenizer=True,add_bos_token = False))
     tokenizer = AutoTokenizer.from_pretrained(tokenizer,use_fast=False,trust_remote_code=True,add_bos_token = False)
-    tokenizer.pad_token_id=0
+    tokenizer.pad_token_id = 0
     tokenizer_class = tokenizer.__class__.__name__ 
     PREFIX = []
-    ROLE = {
-        'user': tokenizer.encode("user:"),
-        'assistant': tokenizer.encode("assistant:")
-    }
-    if tokenizer_class == "BaichuanTokenizer":
+    
+    if tokenizer.__class__.__name__ == 'LlamaTokenizer':
+        tokenizer.im_start_id = tokenizer.encode('<|im_start|>')[0]
+        tokenizer.im_end_id = tokenizer.encode('<|im_end|>')[0]
+        nl_token_id = tokenizer.encode("\n")
+        system_id = tokenizer.encode("system")
+        user_id = tokenizer.encode("user")
+        assistant_id = tokenizer.encode("assistant")
+        
+        ROLE = {
+            'system': [tokenizer.im_start_id] + system_id + nl_token_id,
+            'user': nl_token_id + [tokenizer.im_start_id]+ user_id + nl_token_id,
+            'assistant': [tokenizer.im_end_id] + nl_token_id + [tokenizer.im_start_id] + assistant_id + nl_token_id
+        }
+        
+    elif tokenizer_class == "BaichuanTokenizer":
+        tokenizer.im_end_id = tokenizer.eos_token_id
+        
         ROLE = {
             'user':[195],
             'assistant':[196]
         }
 
     elif tokenizer_class == "QWenTokenizer":
-        tokenizer.pad_token_id = tokenizer.encode("<|endoftext|>")[0]
         tokenizer.bos_token_id = tokenizer.im_start_id
         tokenizer.eos_token_id = tokenizer.im_end_id
+        tokenizer.pad_token_id = tokenizer.encode("<|endoftext|>")[0]
         nl_token_id = tokenizer.encode("\n")
         system_id = tokenizer.encode("system", allowed_special=set())
         user_id = tokenizer.encode("user", allowed_special=set())
         assistant_id = tokenizer.encode("assistant", allowed_special=set())
         
         ROLE = {
-            'system': [tokenizer.bos_token_id] + system_id + nl_token_id,
-            'user': nl_token_id + [tokenizer.bos_token_id] + user_id + nl_token_id,
-            'assistant': [tokenizer.eos_token_id] + nl_token_id + [tokenizer.bos_token_id] + assistant_id + nl_token_id
+            'system': [tokenizer.im_start_id] + system_id + nl_token_id,
+            'user': nl_token_id + [tokenizer.im_start_id] + user_id + nl_token_id,
+            'assistant': [tokenizer.im_end_id] + nl_token_id + [tokenizer.im_start_id] + assistant_id + nl_token_id
         }
         PREFIX = [{"system":""}]
         
     token = token_wiki
-    keys = ["input_ids"]
+    keys = ["input_ids","labels","prompt_len","classes"]
     if dtype == 'qa':
         token = partial(token_qa,ROLE = ROLE, PREFIX = PREFIX)
-        keys.append("labels")
     item_iter = token(filename,tokenizer,MAX_SEQ_LENGTH)
     file = os.path.splitext(os.path.basename(filename))[0]
     partition_dir = os.path.join(output_dir , file)
@@ -166,21 +188,21 @@ def write_parquet(filename,output_dir,tokenizer,MAX_SEQ_LENGTH=2048,dtype='qa',b
         os.makedirs(partition_dir)
     data_batch={k:[] for k in keys}
     for i,data in tqdm.tqdm(enumerate(item_iter)):
-        for k in data_batch:
+        for k in data:
             data_batch[k].append(data[k])
         if (i+1) % batch_size == 0 :
-            pyarrow.parquet.write_table(pyarrow.table([data_batch[k] for k in keys], names=keys),
+            pyarrow.parquet.write_table(pyarrow.table([data_batch[k] for k in data], names=list(data.keys())),
                                         partition_file % (i//batch_size), 
                                         compression=compression)            
             del data_batch
             gc.collect()
-            data_batch={k:[] for k in keys}
+            data_batch={k:[] for k in data}
     if data_batch[keys[0]]:
-        pyarrow.parquet.write_table(pyarrow.table([data_batch[k] for k in keys], names=keys),
+        pyarrow.parquet.write_table(pyarrow.table([data_batch[k] for k in data], names=list(data.keys())),
                                     partition_file % (i//batch_size), 
                                     compression=compression)
     del data_batch                                
-    os.system(f"echo '{i+1} {MAX_SEQ_LENGTH} {batch_size} {len(keys)}' > {check_file}")
+    os.system(f"echo '{i+1} {MAX_SEQ_LENGTH} {batch_size} {len(data.keys())}' > {check_file}")
     print(f"{filename} stored in parquet with {i+1} samples")
     gc.collect()
     

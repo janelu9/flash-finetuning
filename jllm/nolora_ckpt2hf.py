@@ -17,7 +17,7 @@ if __name__=='__main__':
     args = parser.parse_args()
     if not args.tag: 
         with open(os.path.join(args.ckpt,'latest')) as f: args.tag = f.read().strip()
-    args.hf = (args.ckpt+args.tag) if not args.hf else args.hf
+    args.hf = (args.ckpt+"_"+args.tag) if not args.hf else args.hf
     os.makedirs(args.hf,exist_ok=True)
     ckpt_path =os.path.join(args.ckpt,args.tag)
     files = os.listdir(ckpt_path)
@@ -32,7 +32,7 @@ if __name__=='__main__':
     config._name_or_path = args.hf
     config.transformers_version = transformers.__version__
     config.to_json_file(os.path.join(args.hf,"config.json"))
-    pipe2hf = ModelPipe[config.model_type].get_pipe2hf(config.num_hidden_layers)
+    pipe2hf = ModelPipe[config.architectures[0]].get_pipe2hf(config.num_hidden_layers)
     def convert_ckpt2hf(meta_data,layer_files,pipe2hf,num_stages):
         stage_id,meta_data = meta_data
         cur_layer_nums = {int(k.split(".",1)[0]) for dk in meta_data['param_shapes'] for k in dk.keys() }
