@@ -157,7 +157,7 @@ python -m jllm.nolora_ckpt2hf \
 
 |    Model     | Pipeline Stages | Training Speed (tokens/s) |
 | :----------: | :-------------: | :-----------------------: |
-|  llama-13b   |        8        |         82540.54          |
+|  llama-13b   |        8        |         86259.71          |
 | baichuan-13b |        8        |         67174.40          |
 |   qwen-7b    |        4        |         122033.10         |
 |   qwen-14b   |        8        |         75915.26          |
