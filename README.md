@@ -157,10 +157,9 @@ python -m jllm.nolora_ckpt2hf \
 
 |    Model     | Pipeline Stages | Training Speed (tokens/s) |
 | :----------: | :-------------: | :-----------------------: |
-|  llama-13b   |        8        |         86259.71          |
-| baichuan-13b |        8        |         67174.40          |
-|   qwen-7b    |        4        |         122033.10         |
-|   qwen-14b   |        8        |         75915.26          |
+|  llama-13b   |        8        |         93032.45          |
+| baichuan-13b |        8        |         79765.50          |
+|   qwen-14b   |        8        |         80749.57          |
 
 ***Note**: The training speed of each model was measured on 64 NVIDIA A100-PCIE-40GB GPUs with data type of bfloat16 and batch token size of 4M(`batch_size*seq_length`).*
 
@@ -212,4 +211,4 @@ If you find EasyLLM useful or use EasyLLM  code  in your research, please cite i
 
 ## Acknowledgment
 
-This repository benefits from [DeepSpeed](https://github.com/microsoft/DeepSpeed), [Flash-Attention](https://github.com/Dao-AILab/flash-attention.git), [xFormers](https://github.com/facebookresearch/xformers) and [Megatron-DeepSpeed](https://github.com/microsoft/Megatron-DeepSpeed).
+This repository benefits from [DeepSpeed](https://github.com/microsoft/DeepSpeed),  [Megatron-LM](https://github.com/NVIDIA/Megatron-LM.git) and [Flash-Attention](https://github.com/Dao-AILab/flash-attention.git).

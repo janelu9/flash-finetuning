@@ -198,7 +198,6 @@ if args.max_num_checkpoints<0:args.best_of=1
 
 try:
     import flash_attn
-    import xformers
     args.fast = True
 except:
     args.fast = False
