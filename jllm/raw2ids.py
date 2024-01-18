@@ -17,18 +17,17 @@ import gc
 
 IGNORE_TOKEN_ID: int = -100
 OVERLAPPING_LENGTH: int  = 1
-FILTER_LENGTH: int  = 8
-SPLIT_LENGTH: int = 65536
+SPLIT_LENGTH: int = 131072
 
 def clean_wikitext(string):
     """TODO"""
     return string
 
-def split_doc(doc):
+def split_doc(doc,bos=True,eos=True):
     p=0;l=len(doc)
     while p<l:
-        yield p == 0,clean_wikitext(doc[p:p+SPLIT_LENGTH]),(p+SPLIT_LENGTH) >= l
-        p += SPLIT_LENGTH - 4
+        yield p == 0 and bos,clean_wikitext(doc[p:p+SPLIT_LENGTH]),(p+SPLIT_LENGTH) >= l and eos
+        p += SPLIT_LENGTH - 1
 
 def wiki_generator(file,sep="\n\n"):
     with open(file,"r") as f:
@@ -41,35 +40,47 @@ def wiki_generator(file,sep="\n\n"):
                     yield block
                 line = f.readline()  
         except:
+            bos=True
             while line:
                 doc+=line
-                if doc[-2:]==sep or len(doc)>=SPLIT_LENGTH:
-                    for block in split_doc(doc):
+                if doc[-2:]==sep:
+                    for block in split_doc(doc[:-1],bos):
                         yield block
                     doc=""
+                    bos=True
+                elif len(doc)>=SPLIT_LENGTH:
+                    for block in split_doc(doc,bos,False):
+                        yield block
+                    doc=""
+                    bos=False
                 line = f.readline()  
             if doc:
-                for block in split_doc(doc):
+                for block in split_doc(doc,bos):
                     yield block
             
 def token_wiki(file,tokenizer,MAX_SEQ_LENGTH):
+    ids = []
     for bos,doc,eos in wiki_generator(file):
-        ids = []
         if bos:
             ids.append(tokenizer.bos_token_id)
         ids.extend(tokenizer.encode(doc))
         if eos:
             ids.append(tokenizer.eos_token_id)
-        p=0
+        p = 0
         n = len(ids)
         while p<n:
             input_ids=ids[p:p+MAX_SEQ_LENGTH]
-            l=len(input_ids)
-            if FILTER_LENGTH<=l:
-                input_ids.extend([tokenizer.pad_token_id]*(MAX_SEQ_LENGTH-l))
+            l = len(input_ids)
+            if l==MAX_SEQ_LENGTH:
                 yield {'input_ids':np.array(input_ids, dtype=np.int32)}
+            else:
+                ids=input_ids               
             p += MAX_SEQ_LENGTH - OVERLAPPING_LENGTH
-
+            
+    if 0<l<MAX_SEQ_LENGTH:
+        input_ids.extend([tokenizer.pad_token_id]*(MAX_SEQ_LENGTH-l))
+        yield {'input_ids':np.array(input_ids, dtype=np.int32)}
+        
 def qa_generator(file):
     with open(file,"r") as f:
         line = f.readline()
