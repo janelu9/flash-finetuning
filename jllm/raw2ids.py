@@ -140,7 +140,7 @@ def token_qa(file,tokenizer,MAX_SEQ_LENGTH,ROLE = {},PREFIX = []):
    
 def write_parquet(filename,output_dir,tokenizer,MAX_SEQ_LENGTH=2048,dtype='qa',batch_size=2**15,compression='gzip'):
     #tokenizer = LlamaTokenizer.from_pretrained(args.tokenizer,fast_tokenizer=True,add_bos_token = False))
-    tokenizer = AutoTokenizer.from_pretrained(tokenizer,use_fast=False,trust_remote_code=True,add_bos_token = False)
+    tokenizer = AutoTokenizer.from_pretrained(tokenizer,use_fast=True,trust_remote_code=True,add_bos_token = False)
     tokenizer.pad_token_id = 0
     tokenizer_class = tokenizer.__class__.__name__ 
     PREFIX = []
