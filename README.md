@@ -155,13 +155,19 @@ python -m jllm.nolora_ckpt2hf \
 
 #### Supported Models
 
-|    Model     | Pipeline Stages | Training Speed (tokens/s) |
-| :----------: | :-------------: | :-----------------------: |
-|  llama-13b   |        8        |         87087.10          |
-| baichuan-13b |        8        |         79765.50          |
-|   qwen-14b   |        8        |         80749.57          |
+|    Model     | Training Speed (tokens/s) |
+| :----------: | :-----------------------: |
+|  llama-13b   |         87087.10          |
+| baichuan-13b |         79765.50          |
+|   qwen-14b   |         80749.57          |
 
 ***Note**: The training speed of each model was measured on 64 NVIDIA A100-PCIE-40GB GPUs with data type of bfloat16 and batch token size of 4M(`batch_size*seq_length`).*
+
+|  Model   | Training Speed (tokens/s) |
+| :------: | :-----------------------: |
+| llama-7b |         20971.52          |
+
+***Note**: 8 NVIDIA A100-PCIE-40GB GPUs with data type of bfloat16 and batch token size of 128\*2048(`batch_size*seq_length`).*
 
 ## Inference
 
