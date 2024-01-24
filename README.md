@@ -108,7 +108,7 @@ Here are two training examples.
 
 ```shell
 deepspeed -H $HOSTFILE \
-	--train_zero.py \
+    --train_zero.py \
     --model openlm-research/open_llama_13b \
     --train_data dataset0.jsonl
 ```
@@ -117,7 +117,7 @@ deepspeed -H $HOSTFILE \
 
 ```shell
 deepspeed -H $HOSTFILE \
-	--module jllm.train_pipe \
+    --module jllm.train_pipe \
     --model baichuan-inc/Baichuan-13B-Chat \
     --train_data shuffled_datasets \
     --pipe_parallel_size 8 \
@@ -157,17 +157,17 @@ python -m jllm.nolora_ckpt2hf \
 
 |    Model     | Training Speed (tokens/s) |
 | :----------: | :-----------------------: |
-|  llama-13b   |         87087.10          |
+|  llama-13b   |         92749.82          |
 | baichuan-13b |         79765.50          |
 |   qwen-14b   |         80749.57          |
 
-***Note**: The training speed of each model was measured on 64 NVIDIA A100-PCIE-40GB GPUs with data type of bfloat16 and batch token size of 4M(`batch_size*seq_length`).*
+***Note**: The training speed of each model was measured on 64 NVIDIA A100-PCIE-40GB GPUs linked by 100Gb/s bandwidth of InfiniBand with data type of bfloat16 and batch token size of 2048\*2048 (batch_size\*sequence_length,  batch_size = micro_batch_size \* gradient_accumulation_steps).*
 
 |  Model   | Training Speed (tokens/s) |
 | :------: | :-----------------------: |
-| llama-7b |         20971.52          |
+| llama-7b |         21018.62          |
 
-***Note**: 8 NVIDIA A100-PCIE-40GB GPUs with data type of bfloat16 and batch token size of 128\*2048(`batch_size*seq_length`).*
+***Note**: Measured on 8 NVIDIA A100-PCIE-40GB GPUs with data type of bfloat16 and batch token size of 128\*2048.*
 
 ## Inference
 
