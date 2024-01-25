@@ -130,7 +130,7 @@ deepspeed -H $HOSTFILE \
 
 ***Note**: Arguments `train_data` and `eval_data` also support `jsonl` file. Run `python -m jllm.train_pipe -h ` for more arguments.* 
 
-Generally, every GPU process reads one piece of data, that means one worker with 8 GPUs will need to allocate a total of 8x CPU memory for data.  But now they need just 1x if these GPUs belong to one pipeline under my special optimizations in this project . **I strongly recommend you to train your model with faster and low-cost Pipeline Parallelism** rather than ZERO. Pipeline engine could directly load and save model's weights in HuggingFace's format. It could also load parameters from the checkpoint. If you want to resume interruption, any configs related to training shouldn't be modified.
+Generally, every GPU process reads one piece of data, that means one worker with 8 GPUs will need to allocate a total of 8x CPU memory for data.  But now they need just 1x if these GPUs belong to one pipeline under my special optimizations in this project . **I strongly recommend you to train your model with faster and low-cost Pipeline Parallelism** rather than ZERO. Pipeline engine could directly load and save model's weights in HuggingFace's format. It could also load parameters from the checkpoint. If you want to resume interruption, any configs related to training shouldn't be modified. Otherwise, the engine was designed saving checkpoint backend at default to save time for training, that means **you should set the docker container's `shm-size` as 30% of a node's total GPU memory  at least including space for the optimizer's states. Don't check point too frequently unless you disable it via the argument `--no_ckpt_backend`.**
 
 #### Checkpoint Conversion
 

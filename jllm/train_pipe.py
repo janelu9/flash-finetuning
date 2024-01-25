@@ -82,7 +82,7 @@ parser.add_argument('--num_train_epochs',
                     help='train epochs')
 parser.add_argument('--per_device_train_batch_size',
                     type=int,
-                    default=1,
+                    default=2,
                     help='per device train batch_size')
 parser.add_argument('--gradient_accumulation_steps',
                     type=int,
@@ -148,6 +148,9 @@ parser.add_argument('--max_num_checkpoints',
                     type=int,
                     default=1,
                     help='max checkpoint num')
+parser.add_argument('--no_ckpt_backend',
+                    action='store_true',
+                    help='no checkpoint backend.')
 parser.add_argument('--only_ckpt_model',
                     action='store_true',
                     help='Only checkpoint the model parameters.')
