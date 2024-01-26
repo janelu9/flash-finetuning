@@ -148,9 +148,9 @@ parser.add_argument('--max_num_checkpoints',
                     type=int,
                     default=1,
                     help='max checkpoint num')
-parser.add_argument('--no_ckpt_backend',
+parser.add_argument('--not_ckpt_background',
                     action='store_true',
-                    help='no checkpoint backend.')
+                    help='not checkpoint background')
 parser.add_argument('--only_ckpt_model',
                     action='store_true',
                     help='Only checkpoint the model parameters.')
