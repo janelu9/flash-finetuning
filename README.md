@@ -132,7 +132,7 @@ deepspeed -H $HOSTFILE \
 
 Generally, every GPU process reads one piece of data, that means one node with 8 GPUs will need to allocate a total of 8x CPU memory for data.  But now they need just 1x if these GPUs belong to one pipeline under my special optimizations in this project . **I strongly recommend you to train your model with faster and low-cost Pipeline Parallelism** rather than ZERO. Pipeline engine could directly load and save model's weights in HuggingFace's format. It could also load weights from checkpoint. If you want to resume interruption, any configs related to training shouldn't be modified. 
 
-The engine was designed to save checkpoint in the background by default to save more time for training. That means **you should set the docker container's '`shm-size`' to at least 30% of a node's total GPU memory.** **Don't save checkpoint too frequently** unless you disable checkpoint in background via the argument '`--not_ckpt_background`', otherwise your SHM may be out of memory.
+The engine was designed to save checkpoint in the background by default to save more time for training. **Don't save checkpoint too frequently** unless you disable checkpoint in background via the argument '`--not_ckpt_background`' to avoid out of CPU memory.
 
 #### Checkpoint Conversion
 
