@@ -132,7 +132,7 @@ deepspeed -H $HOSTFILE \
 
 Generally, every GPU process reads one piece of data, that means one node with 8 GPUs will need to allocate a total of 8x CPU memory for data.  But now they need just 1x if these GPUs belong to one pipeline under my special optimizations in this project . **I strongly recommend you to train your model with faster and low-cost Pipeline Parallelism** rather than ZERO. Pipeline engine could directly load and save model's weights in HuggingFace's format. It could also load weights from checkpoint. If you want to resume interruption, any configs related to training shouldn't be modified. 
 
-The engine was designed to save checkpoint in the background by default to save more time for training. **Don't save checkpoint too frequently** unless you disable checkpoint in background via the argument '`--not_ckpt_background`' to avoid out of CPU memory.
+The engine was designed to save checkpoint through background process by default to save more time for training. **Don't save checkpoint too frequently** unless you disable checkpoint in background via the argument '`--background_executor none`' to avoid out of CPU memory.
 
 #### Checkpoint Conversion
 
@@ -167,7 +167,7 @@ python -m jllm.nolora_ckpt2hf \
 
 |  Model   | Training Speed (tokens/s) |
 | :------: | :-----------------------: |
-| llama-7b |         21200.90          |
+| llama-7b |         21202.94          |
 
 ***Note**: Measured on 8 NVIDIA A100-PCIE-40GB GPUs with data type of bfloat16 and batch token size of 128\*2048.*
 
