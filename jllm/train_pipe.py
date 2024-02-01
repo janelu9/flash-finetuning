@@ -131,7 +131,7 @@ parser.add_argument("--checkpoint",
 parser.add_argument('--ckpt_step_gt',
                     type=int,
                     default=0,
-                    help='checkpoint steps >= ckpt_step_gt')
+                    help='checkpoint steps > ckpt_step_gt')
 parser.add_argument('--best_of',
                     type=int,
                     default=1,
