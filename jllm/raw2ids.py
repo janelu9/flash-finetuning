@@ -58,28 +58,63 @@ def wiki_generator(file,sep="\n\n"):
                 for block in split_doc(doc,bos):
                     yield block
             
-def token_wiki(file,tokenizer,MAX_SEQ_LENGTH):
-    ids = []
-    for bos,doc,eos in wiki_generator(file):
-        if bos:
-            ids.append(tokenizer.bos_token_id)
-        ids.extend(tokenizer.encode(doc))
-        if eos:
-            ids.append(tokenizer.eos_token_id)
-        p = 0
-        n = len(ids)
-        while p<n:
-            input_ids=ids[p:p+MAX_SEQ_LENGTH]
-            l = len(input_ids)
-            if l==MAX_SEQ_LENGTH:
+def token_wiki(file,tokenizer,MAX_SEQ_LENGTH,stack=True):
+    if stack:
+        ids = []
+        cu_seqlens = [0]
+        for bos,doc,eos in wiki_generator(file):
+            if bos:
+                if len(ids)>0:cu_seqlens.append(len(ids))
+                ids.append(tokenizer.bos_token_id)
+            ids.extend(tokenizer.encode(doc))
+            if eos:
+                ids.append(tokenizer.eos_token_id)
+            p = 0
+            n = len(ids)
+            while p<n-OVERLAPPING_LENGTH:
+                input_ids=ids[p:p+MAX_SEQ_LENGTH]
+                l = len(input_ids)
+                if l==MAX_SEQ_LENGTH:
+                    cu_seqlens.append(MAX_SEQ_LENGTH-1)
+                    yield {'input_ids':np.array(input_ids, dtype=np.int32),'cu_seqlens':np.array(cu_seqlens, dtype=np.int32)}
+                    cu_seqlens = [0]
+                p += MAX_SEQ_LENGTH-OVERLAPPING_LENGTH
+                
+            if l==MAX_SEQ_LENGTH: # all ids yielded, clear ids
+                ids = []   
+            elif l>=MAX_SEQ_LENGTH-3: # pad few then yield  
+                input_ids.extend([tokenizer.pad_token_id]*(MAX_SEQ_LENGTH-l))
+                cu_seqlens.append(MAX_SEQ_LENGTH-1)
+                yield {'input_ids':np.array(input_ids, dtype=np.int32),'cu_seqlens':np.array(cu_seqlens, dtype=np.int32)}
+                cu_seqlens = [0]
+                ids = []
+            else: # join to next doc
+                ids=input_ids
+ 
+        if 1<l<MAX_SEQ_LENGTH:
+            cu_seqlens.append(MAX_SEQ_LENGTH-1)
+            input_ids.extend([tokenizer.pad_token_id]*(MAX_SEQ_LENGTH-l))
+            yield {'input_ids':np.array(input_ids, dtype=np.int32),'cu_seqlens':np.array(cu_seqlens, dtype=np.int32)}
+    else:
+        for bos,doc,eos in wiki_generator(file):
+            ids = []
+            if bos:
+                ids.append(tokenizer.bos_token_id)
+            ids.extend(tokenizer.encode(doc))
+            if eos:
+                ids.append(tokenizer.eos_token_id)
+            p = 0
+            n = len(ids)
+            while p<n-OVERLAPPING_LENGTH:
+                input_ids=ids[p:p+MAX_SEQ_LENGTH]
+                l = len(input_ids)
+                if l==MAX_SEQ_LENGTH:
+                    yield {'input_ids':np.array(input_ids, dtype=np.int32)}
+                p += MAX_SEQ_LENGTH-OVERLAPPING_LENGTH
+                
+            if 1<l<MAX_SEQ_LENGTH:
+                input_ids.extend([tokenizer.pad_token_id]*(MAX_SEQ_LENGTH-l))
                 yield {'input_ids':np.array(input_ids, dtype=np.int32)}
-            else:
-                ids=input_ids               
-            p += MAX_SEQ_LENGTH - OVERLAPPING_LENGTH
-            
-    if 0<l<MAX_SEQ_LENGTH:
-        input_ids.extend([tokenizer.pad_token_id]*(MAX_SEQ_LENGTH-l))
-        yield {'input_ids':np.array(input_ids, dtype=np.int32)}
         
 def qa_generator(file):
     with open(file,"r") as f:
@@ -138,7 +173,7 @@ def token_qa(file,tokenizer,MAX_SEQ_LENGTH,ROLE = {},PREFIX = []):
                         qa_inputs.update({"prompt_len":divide[1],"classes":int(js['category'])})
                     yield qa_inputs
    
-def write_parquet(filename,output_dir,tokenizer,MAX_SEQ_LENGTH=2048,dtype='qa',batch_size=2**15,compression='gzip'):
+def write_parquet(filename,output_dir,tokenizer,MAX_SEQ_LENGTH=2048,dtype='qa',batch_size=2**15,compression='gzip',stack=False):
     #tokenizer = LlamaTokenizer.from_pretrained(args.tokenizer,fast_tokenizer=True,add_bos_token = False))
     tokenizer = AutoTokenizer.from_pretrained(tokenizer,use_fast=True,trust_remote_code=True,add_bos_token = False)
     tokenizer.pad_token_id = 0
@@ -183,10 +218,11 @@ def write_parquet(filename,output_dir,tokenizer,MAX_SEQ_LENGTH=2048,dtype='qa',b
         }
         PREFIX = [{"system":""}]
         
-    token = token_wiki
-    keys = ["input_ids","labels","prompt_len","classes"]
+    keys = ["input_ids","labels","prompt_len","classes","cu_seqlens"]
     if dtype == 'qa':
-        token = partial(token_qa,ROLE = ROLE, PREFIX = PREFIX)
+        token = partial(token_qa, ROLE=ROLE, PREFIX=PREFIX)
+    else:
+        token = partial(token_wiki,stack = stack)
     item_iter = token(filename,tokenizer,MAX_SEQ_LENGTH)
     file = os.path.splitext(os.path.basename(filename))[0]
     partition_dir = os.path.join(output_dir , file)
@@ -229,6 +265,7 @@ if __name__=='__main__':
     parser.add_argument('--cores', type=int, default=-1)
     parser.add_argument('--tokenizer', type=str, default="openlm-research/open_llama_13b")
     parser.add_argument('--tmp', type=str, default="tmp")
+    parser.add_argument('--stack', action='store_true', help="stack tokens")
     parser.add_argument('-T', action='store_true', help="thread")
     parser.add_argument('-C', action='store_true', help="clean")
     args = parser.parse_args()
@@ -257,7 +294,14 @@ if __name__=='__main__':
     cpus=int(os.cpu_count()*0.8) if args.cores <0 else  args.cores
     print(f"########## begine converting {args.t} data with {cpus} executors.###########" )
     with Pool(max_workers=cpus) as exe:
-        func = partial(write_parquet,output_dir=output_dir,tokenizer=args.tokenizer,MAX_SEQ_LENGTH= args.seq_len,dtype=args.t,batch_size=args.batch_size,compression=args.c.lower())
+        func = partial(write_parquet,
+                       output_dir=output_dir,
+                       tokenizer=args.tokenizer,
+                       MAX_SEQ_LENGTH= args.seq_len,
+                       dtype=args.t,
+                       batch_size=args.batch_size,
+                       compression=args.c.lower(),
+                       stack=args.stack)
         files =[os.path.join(tmp, i) for i in os.listdir(tmp)]
         files.sort()
         np.random.shuffle(files)

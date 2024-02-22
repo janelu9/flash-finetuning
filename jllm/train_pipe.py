@@ -112,6 +112,9 @@ parser.add_argument('--seq_len',
                     type=int,
                     default=2048,
                     help='max seq len')
+parser.add_argument('--block_mask',
+                    action='store_true',
+                    help="use BlockDiagonalCausalMask")
 parser.add_argument('--steps_per_print',
                     type=int,
                     default=10,
@@ -128,10 +131,15 @@ parser.add_argument("--checkpoint",
                     type=str,
                     default= "",
                     help="checkpoint dir")
+parser.add_argument('--background_executor',
+                    type=str,
+                    default='process',
+                    choices=["process", "thread", "null", "none",""],
+                    help='excutor of background')
 parser.add_argument('--ckpt_step_gt',
                     type=int,
                     default=0,
-                    help='checkpoint steps > ckpt_step_gt')
+                    help='checkpoint steps >= ckpt_step_gt')
 parser.add_argument('--best_of',
                     type=int,
                     default=1,
@@ -148,12 +156,6 @@ parser.add_argument('--max_num_checkpoints',
                     type=int,
                     default=1,
                     help='max checkpoint num')
-parser.add_argument('--background_executor',
-                    type=str,
-                    default='process',
-                    choices=["process", "thread", "null", "none",""],
-                    help='excutor of background'
-                    )
 parser.add_argument('--only_ckpt_model',
                     action='store_true',
                     help='Only checkpoint the model parameters.')
@@ -164,9 +166,6 @@ parser.add_argument('--early_stop',
 parser.add_argument('--no_gradient_checkpointing',
                     action='store_true',
                     help='disable gradient checkpointing for decoder layer.')
-parser.add_argument('--gradient_checkpointing_head',
-                    action='store_true',
-                    help='enable gradient checkpointing for lm_head.')
 parser.add_argument('--low_mem',
                     action='store_true',
                     help='lower memory usage.')
@@ -253,15 +252,18 @@ def main(args):
         config = AutoConfig.from_pretrained(args.model,trust_remote_code=True)
     except:
         config = AutoConfig.from_pretrained(args.model)
+    config.block_mask=args.block_mask
+    config.gradient_checkpointing=not args.no_gradient_checkpointing and not args.only_optimize_lora
     torch.distributed.barrier()
     
     topo = ProcessTopology(['data','pipe','model'], [args.data_parallel_size, args.pipe_parallel_size, args.model_parallel_size])
     args.seed = args.seed + topo.get_coord(args.global_rank).pipe
     
     if args.model_parallel_size > 1:
-        from jllm.core import parallel_state
+        from jllm.core import parallel_state,tensor_parallel
         parallel_state.initialize_model_parallel(args.model_parallel_size,args.pipe_parallel_size)
-        from megatron.core.model_parallel_config import ModelParallelConfig
+        tensor_parallel.model_parallel_cuda_manual_seed(args.seed)
+        from jllm.core.model_parallel_config import ModelParallelConfig
         parallel_config = ModelParallelConfig(tensor_model_parallel_size=args.model_parallel_size,
                                               pipeline_model_parallel_size=args.pipe_parallel_size,
                                               params_dtype=config.torch_dtype,
@@ -282,9 +284,6 @@ def main(args):
     else:
         model = ModelPipe[config.architectures[0]](
             config,
-            not args.no_gradient_checkpointing and not args.only_optimize_lora,
-            args.fast,
-            args.gradient_checkpointing_head,
             loss_fn=CrossEntropyLossPipe[config.architectures[0]](alpha=config.alpha) if 'Mixed' in CrossEntropyLossPipe[config.architectures[0]].__name__ else CrossEntropyLossPipe[config.architectures[0]](),
             topology=topo,
             base_seed=args.seed,

@@ -7,4 +7,3 @@ flash-attn
 pyarrow
 tiktoken
 vllm
-git + https://github.com/microsoft/Megatron-DeepSpeed.git

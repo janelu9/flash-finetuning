@@ -1,5 +1,5 @@
 from .cross_entropy import vocab_parallel_cross_entropy
-from .data import broadcast_data
+#from .data import broadcast_data
 
 from .layers import (
     ColumnParallelLinear,
@@ -22,11 +22,9 @@ from .mappings import (
 )
 
 from .random import (
-    checkpoint,
+    #checkpoint,
     get_cuda_rng_tracker,
     model_parallel_cuda_manual_seed,
-    init_checkpointed_activations_memory_buffer,
-    reset_checkpointed_activations_memory_buffer,
 )
 
 from .utils import (
@@ -39,7 +37,7 @@ __all__ = [
     # cross_entropy.py
     "vocab_parallel_cross_entropy",
     # data.py
-    "broadcast_data",
+    #"broadcast_data",
     #layers.py
     "ColumnParallelLinear",
     "RowParallelLinear",
@@ -53,15 +51,15 @@ __all__ = [
     "copy_to_tensor_model_parallel_region",
     "gather_from_tensor_model_parallel_region",
     "gather_from_sequence_parallel_region",
-#    "reduce_from_tensor_model_parallel_region",
+    # "reduce_from_tensor_model_parallel_region",
     "scatter_to_tensor_model_parallel_region",
     "scatter_to_sequence_parallel_region",
     # random.py
-    "checkpoint",
+    #"checkpoint",
     "get_cuda_rng_tracker",
     "model_parallel_cuda_manual_seed",
-    "init_checkpointed_activations_memory_buffer",
-    "reset_checkpointed_activations_memory_buffer",
+    #"init_checkpointed_activations_memory_buffer",
+    #"reset_checkpointed_activations_memory_buffer",
     # utils.py
     "split_tensor_along_last_dim",
     "split_tensor_into_1d_equal_chunks",

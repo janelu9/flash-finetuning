@@ -4,8 +4,29 @@
 
 import torch
 from typing import Optional
+from functools import reduce
+import operator
+from deepspeed import get_accelerator
 
-from megatron.core.utils import GlobalMemoryBuffer
+class GlobalMemoryBuffer:
+    """Global buffer to avoid dynamic memory allocations.
+    Caller should ensure that buffers of the same name
+    are not used concurrently."""
+
+    def __init__(self):
+        self.buffer = {}
+
+    def get_tensor(self, tensor_shape, dtype, name):
+        required_len = reduce(operator.mul, tensor_shape, 1)
+        if self.buffer.get((name, dtype), None) is None or \
+                self.buffer[(name, dtype)].numel() < required_len:
+            self.buffer[(name, dtype)] = \
+                torch.empty(required_len,
+                            dtype=dtype,
+                            device=get_accelerator().current_device_name(),
+                            requires_grad=False)
+
+        return self.buffer[(name, dtype)][0:required_len].view(*tensor_shape)
 
 # Intra-layer model parallel group that the current rank belongs to.
 _TENSOR_MODEL_PARALLEL_GROUP = None
@@ -427,7 +448,7 @@ def get_tensor_model_parallel_world_size():
 
 def get_model_parallel_world_size():
     #assert get_pipeline_model_parallel_world_size() == 1, "legacy get_model_parallel_world_size is only supported if PP is disabled"
-    return gtorch.distributed.get_world_size(group=get_model_parallel_group())
+    return torch.distributed.get_world_size(group=get_model_parallel_group())
 
 def get_sequence_parallel_world_size():
     """Return world size for the sequence parallel group."""
