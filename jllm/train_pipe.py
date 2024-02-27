@@ -172,6 +172,9 @@ parser.add_argument('--low_mem',
 parser.add_argument('--no_shuf',
                     action='store_true',
                     help='disable shuffle at every epoch.')
+parser.add_argument('--init',
+                    action='store_true',
+                    help='train from 0')
 parser.add_argument("--seed",
                     type=int,
                     default=1234,
@@ -290,7 +293,7 @@ def main(args):
             # partition_method="type:DecoderLayer",
             )
         
-    if not(args.resume_ckpt or args.from_ckpt): model.from_pretrained(args.model)
+    if not(args.resume_ckpt or args.from_ckpt) and not args.init: model.from_pretrained(args.model)
     
     if args.lora_dim > 0:
         model = convert_linear_layer_to_lora(
