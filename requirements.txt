@@ -6,4 +6,4 @@ accelerate
 flash-attn
 pyarrow
 tiktoken
-vllm
+#vllm
