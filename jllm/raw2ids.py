@@ -220,8 +220,8 @@ def write_parquet(filename,output_dir,tokenizer,MAX_SEQ_LENGTH=2048,dtype='qa',b
         
     elif tokenizer_class.startswith("Qwen2Tokenizer"):
     
-        tokenizer.bos_token_id = tokenizer.encode("<|im_start|>")[0]
-        tokenizer.eos_token_id = tokenizer.encode("<|im_end|>")[0]
+        tokenizer.bos_token_id = tokenizer.im_start_id = tokenizer.encode("<|im_start|>")[0]
+        tokenizer.eos_token_id = tokenizer.im_end_id = tokenizer.encode("<|im_end|>")[0]
         tokenizer.pad_token_id = tokenizer.encode("<|endoftext|>")[0]
         nl_token_id = tokenizer.encode("\n")
         system_id = tokenizer.encode("system")
@@ -229,9 +229,9 @@ def write_parquet(filename,output_dir,tokenizer,MAX_SEQ_LENGTH=2048,dtype='qa',b
         assistant_id = tokenizer.encode("assistant")
         
         ROLE = {
-            'system': [tokenizer.bos_token_id] + system_id + nl_token_id,
-            'user': nl_token_id + [tokenizer.bos_token_id] + user_id + nl_token_id,
-            'assistant': [tokenizer.eos_token_id] + nl_token_id + [tokenizer.bos_token_id] + assistant_id + nl_token_id
+            'system': [tokenizer.im_start_id] + system_id + nl_token_id,
+            'user': nl_token_id + [tokenizer.im_start_id] + user_id + nl_token_id,
+            'assistant': [tokenizer.im_end_id] + nl_token_id + [tokenizer.im_start_id] + assistant_id + nl_token_id
         }
         PREFIX = [{"system":"You are a helpful assistant."}]
         
