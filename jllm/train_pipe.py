@@ -17,7 +17,6 @@ from .model import (
     convert_linear_layer_to_lora,
     only_optimize_lora_parameters,
     ModelPipe,
-    CrossEntropyLossPipe
     )
 from .trainer import train
 from deepspeed.ops.adam import DeepSpeedCPUAdam, FusedAdam
@@ -204,12 +203,6 @@ assert args.max_num_checkpoints != 0
 assert args.best_of>0
 if args.max_num_checkpoints<0:args.best_of=1
 
-try:
-    import flash_attn
-    args.fast = True
-except:
-    args.fast = False
-
 def main(args):
     if args.local_rank == -1:
         device = torch.device("cuda")
@@ -275,11 +268,10 @@ def main(args):
         parallel_config.batch_size = args.per_device_train_batch_size
         parallel_config.seq_length = int(open(os.path.join(args.train_data,[f for f in os.listdir(args.train_data) if f[-4:] == '.crc'][0])).read().split()[1])
         parallel_config.low_mem = args.low_mem
-        from jllm.model import ModelParallel,ParallelCrossEntropy
+        from jllm.model import ModelParallel
         model =  ModelParallel[config.architectures[0]](
             config,
             parallel_config=parallel_config,
-            loss_fn = ParallelCrossEntropy,
             topology=topo,
             base_seed=args.seed,
             # partition_method="type:DecoderLayer",
@@ -287,7 +279,6 @@ def main(args):
     else:
         model = ModelPipe[config.architectures[0]](
             config,
-            loss_fn=CrossEntropyLossPipe[config.architectures[0]](alpha=config.alpha) if 'Mixed' in CrossEntropyLossPipe[config.architectures[0]].__name__ else CrossEntropyLossPipe[config.architectures[0]](),
             topology=topo,
             base_seed=args.seed,
             # partition_method="type:DecoderLayer",
@@ -302,6 +293,7 @@ def main(args):
             args.lora_dim)
         if args.only_optimize_lora:
             model = only_optimize_lora_parameters(model)
+            
     if "optimizer" not in ds_config:
         optimizer_grouped_parameters = get_optimizer_grouped_parameters(
             model, args.weight_decay)

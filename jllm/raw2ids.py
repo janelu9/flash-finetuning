@@ -180,7 +180,7 @@ def write_parquet(filename,output_dir,tokenizer,MAX_SEQ_LENGTH=2048,dtype='qa',b
     tokenizer_class = tokenizer.__class__.__name__ 
     PREFIX = []
     
-    if tokenizer.__class__.__name__ == 'LlamaTokenizer':
+    if tokenizer_class.startswith('LlamaTokenizer'):
         tokenizer.im_start_id = tokenizer.encode('<|im_start|>')[0]
         tokenizer.im_end_id = tokenizer.encode('<|im_end|>')[0]
         nl_token_id = tokenizer.encode("\n")
@@ -194,7 +194,7 @@ def write_parquet(filename,output_dir,tokenizer,MAX_SEQ_LENGTH=2048,dtype='qa',b
             'assistant': [tokenizer.im_end_id] + nl_token_id + [tokenizer.im_start_id] + assistant_id + nl_token_id
         }
         
-    elif tokenizer_class == "BaichuanTokenizer":
+    elif tokenizer_class.startswith("BaichuanTokenizer"):
         tokenizer.im_end_id = tokenizer.eos_token_id
         
         ROLE = {
@@ -202,7 +202,7 @@ def write_parquet(filename,output_dir,tokenizer,MAX_SEQ_LENGTH=2048,dtype='qa',b
             'assistant':[196]
         }
 
-    elif tokenizer_class == "QWenTokenizer":
+    elif tokenizer_class.startswith("QWenTokenizer"):
         tokenizer.bos_token_id = tokenizer.im_start_id
         tokenizer.eos_token_id = tokenizer.im_end_id
         tokenizer.pad_token_id = tokenizer.encode("<|endoftext|>")[0]
@@ -217,6 +217,23 @@ def write_parquet(filename,output_dir,tokenizer,MAX_SEQ_LENGTH=2048,dtype='qa',b
             'assistant': [tokenizer.im_end_id] + nl_token_id + [tokenizer.im_start_id] + assistant_id + nl_token_id
         }
         PREFIX = [{"system":""}]
+        
+    elif tokenizer_class.startswith("Qwen2Tokenizer"):
+    
+        tokenizer.bos_token_id = tokenizer.encode("<|im_start|>")[0]
+        tokenizer.eos_token_id = tokenizer.encode("<|im_end|>")[0]
+        tokenizer.pad_token_id = tokenizer.encode("<|endoftext|>")[0]
+        nl_token_id = tokenizer.encode("\n")
+        system_id = tokenizer.encode("system")
+        user_id = tokenizer.encode("user")
+        assistant_id = tokenizer.encode("assistant")
+        
+        ROLE = {
+            'system': [tokenizer.bos_token_id] + system_id + nl_token_id,
+            'user': nl_token_id + [tokenizer.bos_token_id] + user_id + nl_token_id,
+            'assistant': [tokenizer.eos_token_id] + nl_token_id + [tokenizer.bos_token_id] + assistant_id + nl_token_id
+        }
+        PREFIX = [{"system":"You are a helpful assistant."}]
         
     keys = ["input_ids","labels","prompt_len","classes","cu_seqlens"]
     if dtype == 'qa':
