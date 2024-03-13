@@ -171,6 +171,9 @@ parser.add_argument('--low_mem',
 parser.add_argument('--no_shuf',
                     action='store_true',
                     help='disable shuffle at every epoch.')
+parser.add_argument('--no_safetensor',
+                    action='store_true',
+                    help='not use safetensor.')
 parser.add_argument('--init',
                     action='store_true',
                     help='train from 0')
@@ -293,7 +296,6 @@ def main(args):
             args.lora_dim)
         if args.only_optimize_lora:
             model = only_optimize_lora_parameters(model)
-            
     if "optimizer" not in ds_config:
         optimizer_grouped_parameters = get_optimizer_grouped_parameters(
             model, args.weight_decay)
