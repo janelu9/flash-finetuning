@@ -233,7 +233,7 @@ def write_parquet(filename,output_dir,tokenizer,MAX_SEQ_LENGTH=2048,dtype='qa',b
             'user': nl_token_id + [tokenizer.im_start_id] + user_id + nl_token_id,
             'assistant': [tokenizer.im_end_id] + nl_token_id + [tokenizer.im_start_id] + assistant_id + nl_token_id
         }
-        PREFIX = [{"system":"You are a helpful assistant."}]
+        PREFIX = [{"system":"You are a helpful assistant"}]
         
     keys = ["input_ids","labels","prompt_len","classes","cu_seqlens"]
     if dtype == 'qa':

@@ -167,7 +167,7 @@ python -m jllm.nolora_ckpt2hf \
 
 |  Model   | Training Speed (tokens/s) |
 | :------: | :-----------------------: |
-| llama-7b |         21420.03          |
+| llama-7b |         25311.232         |
 
 ***Note**: Measured on 8 NVIDIA A100-PCIE-40GB GPUs with data type of bfloat16 and batch token size of 128\*2048.*
 
