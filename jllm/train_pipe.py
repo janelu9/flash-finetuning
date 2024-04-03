@@ -207,12 +207,10 @@ assert args.best_of>0
 if args.max_num_checkpoints<0:args.best_of=1
 
 def main(args):
-    if args.local_rank == -1:
-        device = torch.device("cuda")
-    else:
-        torch.cuda.set_device(args.local_rank)
-        device = torch.device("cuda", args.local_rank)
-        deepspeed.init_distributed()
+    args.local_rank = int(os.environ['LOCAL_RANK'])
+    torch.cuda.set_device(args.local_rank)
+    device = torch.device("cuda", args.local_rank)
+    deepspeed.init_distributed()
     args.global_rank = torch.distributed.get_rank()
     args.world_size = torch.distributed.get_world_size()
     assert args.world_size % (args.pipe_parallel_size * args.model_parallel_size) == 0
