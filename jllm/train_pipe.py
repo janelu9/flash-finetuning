@@ -62,8 +62,12 @@ parser.add_argument("--ds_config",
                     help="deepspeed's config file")
 parser.add_argument('--zero_stage',
                     type=int,
-                    default=0,
+                    default=1,
                     help='zero stage')
+parser.add_argument('--timeout',
+                    type=int,
+                    default=1800,
+                    help='timeout')
 parser.add_argument('--pipe_parallel_size',
                     type=int,
                     default=1,
@@ -210,7 +214,7 @@ def main(args):
     args.local_rank = int(os.environ['LOCAL_RANK'])
     torch.cuda.set_device(args.local_rank)
     device = torch.device("cuda", args.local_rank)
-    deepspeed.init_distributed()
+    deepspeed.init_distributed(timeout=args.timeout)
     args.global_rank = torch.distributed.get_rank()
     args.world_size = torch.distributed.get_world_size()
     assert args.world_size % (args.pipe_parallel_size * args.model_parallel_size) == 0
