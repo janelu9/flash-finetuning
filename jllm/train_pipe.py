@@ -24,6 +24,7 @@ from deepspeed.runtime.pipe import ProcessTopology
 import numpy as np
 import os
 import importlib
+import datetime
 import argparse
 import sys
 os.environ['PATH']+=":"+os.path.dirname(sys.executable)
@@ -62,7 +63,7 @@ parser.add_argument("--ds_config",
                     help="deepspeed's config file")
 parser.add_argument('--zero_stage',
                     type=int,
-                    default=1,
+                    default=0,
                     help='zero stage')
 parser.add_argument('--timeout',
                     type=int,
@@ -214,7 +215,7 @@ def main(args):
     args.local_rank = int(os.environ['LOCAL_RANK'])
     torch.cuda.set_device(args.local_rank)
     device = torch.device("cuda", args.local_rank)
-    deepspeed.init_distributed(timeout=args.timeout)
+    deepspeed.init_distributed(timeout=datetime.timedelta(seconds=args.timeout))
     args.global_rank = torch.distributed.get_rank()
     args.world_size = torch.distributed.get_world_size()
     assert args.world_size % (args.pipe_parallel_size * args.model_parallel_size) == 0
