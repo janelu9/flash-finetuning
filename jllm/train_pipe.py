@@ -65,6 +65,13 @@ parser.add_argument('--zero_stage',
                     type=int,
                     default=0,
                     help='zero stage')
+parser.add_argument('--split_dlayer',
+                    action='store_true',
+                    help='split decoder layers')
+parser.add_argument('--emb_partitions',
+                    type=int,
+                    default=1,
+                    help='split embedding')
 parser.add_argument('--timeout',
                     type=int,
                     default=1800,
@@ -80,6 +87,10 @@ parser.add_argument('--model_parallel_size',
 parser.add_argument('--offload',
                     action='store_true',
                     help='Enable ZeRO Offload techniques.') 
+parser.add_argument("--partition_method",
+                    type=str,
+                    default= "parameters",
+                    help="partition method")
 parser.add_argument('--num_train_epochs',
                     type=int,
                     default=1,
@@ -210,11 +221,15 @@ assert args.early_stop != 0
 assert args.max_num_checkpoints != 0
 assert args.best_of>0
 if args.max_num_checkpoints<0:args.best_of=1
+args.device = deepspeed.get_accelerator().device_name()
+if args.device == 'npu':
+    import torch_npu
+    from torch_npu.contrib import transfer_to_npu
 
 def main(args):
     args.local_rank = int(os.environ['LOCAL_RANK'])
     torch.cuda.set_device(args.local_rank)
-    device = torch.device("cuda", args.local_rank)
+    device = torch.device(args.device, args.local_rank)
     deepspeed.init_distributed(timeout=datetime.timedelta(seconds=args.timeout))
     args.global_rank = torch.distributed.get_rank()
     args.world_size = torch.distributed.get_world_size()
@@ -256,6 +271,9 @@ def main(args):
         config = AutoConfig.from_pretrained(args.model)
     config.block_mask=args.block_mask
     config.gradient_checkpointing=not args.no_gradient_checkpointing and not args.only_optimize_lora
+    config.num_partitions = args.emb_partitions
+    config.split_dlayer = args.split_dlayer
+    config.device = args.device
     torch.distributed.barrier()
     
     topo = ProcessTopology(['data','pipe','model'], [args.data_parallel_size, args.pipe_parallel_size, args.model_parallel_size])
@@ -280,14 +298,14 @@ def main(args):
             parallel_config=parallel_config,
             topology=topo,
             base_seed=args.seed,
-            # partition_method="type:DecoderLayer",
+            partition_method=args.partition_method,
             )
     else:
         model = ModelPipe[config.architectures[0]](
             config,
             topology=topo,
             base_seed=args.seed,
-            # partition_method="type:DecoderLayer",
+            partition_method=args.partition_method,
             )
         
     if not(args.resume_ckpt or args.from_ckpt) and not args.init: model.from_pretrained(args.model)

@@ -123,7 +123,7 @@ def qa_generator(file):
             yield line
             line = f.readline()
 
-def token_qa(file,tokenizer,MAX_SEQ_LENGTH,ROLE = {},PREFIX = []):
+def token_qa(file,tokenizer,MAX_SEQ_LENGTH,ROLE = {},PREFIX = [],ADAPT = []):
     from .data.utils import qa_inputs_generator
     for sample in qa_generator(file):
         js = json.loads(sample.strip())
@@ -138,7 +138,10 @@ def token_qa(file,tokenizer,MAX_SEQ_LENGTH,ROLE = {},PREFIX = []):
                     ids.extend(tokenizer.encode(v))
                     pre_k = k
                     break
-
+                    
+            if k != 'system':
+                ids = ADAPT + ids
+            
             for msg in msgs[start+1:]:
                 k,v = next(iter(msg.items()))
                 if k != pre_k:
@@ -179,6 +182,7 @@ def write_parquet(filename,output_dir,tokenizer,MAX_SEQ_LENGTH=2048,dtype='qa',b
     tokenizer.pad_token_id = 0
     tokenizer_class = tokenizer.__class__.__name__ 
     PREFIX = []
+    ADAPT = []
     
     if tokenizer_class.startswith('LlamaTokenizer'):
         tokenizer.im_start_id = tokenizer.encode('<|im_start|>')[0]
@@ -193,6 +197,28 @@ def write_parquet(filename,output_dir,tokenizer,MAX_SEQ_LENGTH=2048,dtype='qa',b
             'user': nl_token_id + [tokenizer.im_start_id]+ user_id + nl_token_id,
             'assistant': [tokenizer.im_end_id] + nl_token_id + [tokenizer.im_start_id] + assistant_id + nl_token_id
         }
+        
+    elif tokenizer_class.startswith('PreTrainedTokenizerFast'):
+    
+        tokenizer.bos_token_id = tokenizer.encode('<|begin_of_text|>')[0]
+        tokenizer.im_end_id = tokenizer.encode('<|eot_id|>')[0]
+        tokenizer.pad_token_id = tokenizer.encode('<|end_of_text|>')[0]
+        tokenizer.eos_token_id = tokenizer.im_end_id
+
+        start_header_id = tokenizer.encode('<|start_header_id|>')
+        end_header_id = tokenizer.encode('<|end_header_id|>')
+        nl_token_id = tokenizer.encode("\n\n")
+        system_id = tokenizer.encode("system")
+        user_id = tokenizer.encode("user")
+        assistant_id = tokenizer.encode("assistant")
+
+        ROLE = {
+            'system': [tokenizer.bos_token_id]+start_header_id+system_id+end_header_id+ nl_token_id,
+            'user': start_header_id+user_id+end_header_id+nl_token_id,
+            'assistant': [tokenizer.im_end_id ]+start_header_id+assistant_id+end_header_id+nl_token_id
+        }
+        
+        ADAPT = [tokenizer.bos_token_id,start_header_id[0]]
         
     elif tokenizer_class.startswith("BaichuanTokenizer"):
         tokenizer.im_end_id = tokenizer.eos_token_id
@@ -237,7 +263,7 @@ def write_parquet(filename,output_dir,tokenizer,MAX_SEQ_LENGTH=2048,dtype='qa',b
         
     keys = ["input_ids","labels","prompt_len","classes","cu_seqlens"]
     if dtype == 'qa':
-        token = partial(token_qa, ROLE=ROLE, PREFIX=PREFIX)
+        token = partial(token_qa, ROLE=ROLE, PREFIX=PREFIX, ADAPT=ADAPT)
     else:
         token = partial(token_wiki,stack = stack)
     item_iter = token(filename,tokenizer,MAX_SEQ_LENGTH)
