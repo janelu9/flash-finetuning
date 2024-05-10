@@ -1,9 +1,7 @@
-#!/usr/bin/env python
-# coding: utf-8
-# Created on Thur Jun 29 09:36:49 2023
-# @author: Lu Jian
-# Email:janelu@live.cn;
+# Copyright (c) Microsoft Corporation.
+# SPDX-License-Identifier: Apache-2.0
 
+# DeepSpeed Team
 import math
 import torch
 from torch import nn
@@ -93,14 +91,14 @@ def convert_linear_layer_to_lora(model,
                                  lora_dim=0,
                                  lora_scaling=1,
                                  lora_droppout=0):
-    repalce_name = []
+    replace_name = []
     for name, module in model.named_modules():
-        if isinstance(module, nn.Linear):
-            for k in part_module_name:
-                if k in name:
-                    repalce_name.append(name)
+        if isinstance(module, nn.Linear) :
+            for part_name_i in part_module_name:
+                if part_name_i in name:
+                    replace_name.append(name)
                     break
-    for name in repalce_name:
+    for name in replace_name:
         module = recursive_getattr(model, name)
         tmp = LinearLayer_LoRA(
             module.weight, lora_dim, lora_scaling, lora_droppout,
@@ -119,11 +117,11 @@ def _z3_params_to_fetch(param_list):
 
 # convert the LoRA layer to linear layer
 def convert_lora_to_linear_layer(model):
-    repalce_name = []
+    replace_name = []
     for name, module in model.named_modules():
         if isinstance(module, LinearLayer_LoRA):
-            repalce_name.append(name)
-    for name in repalce_name:
+            replace_name.append(name)
+    for name in replace_name:
         module = recursive_getattr(model, name)
         zero_stage_3 = hasattr(module.weight, 'ds_id')
         with deepspeed.zero.GatheredParameters(_z3_params_to_fetch([
@@ -136,11 +134,25 @@ def convert_lora_to_linear_layer(model):
     return model
 
 
-def only_optimize_lora_parameters(model):
+def only_optimize_lora_parameters(model, force_optimize_params=[]):
     # turn off the gradient of all the parameters except the LoRA parameters
     for name, param in model.named_parameters():
-        if "lora_right_weight" in name or "lora_left_weight" in name:
+        if "lora_right_weight" in name or "lora_left_weight" in name or name in force_optimize_params:
             param.requires_grad = True
         else:
             param.requires_grad = False
+    return model
+
+
+def make_model_gradient_checkpointing_compatible(model):
+    # Higgingface added this enable input require grads function to make gradient checkpointing work for lora-only optimization
+    if hasattr(model, "enable_input_require_grads"):
+        model.enable_input_require_grads()
+    elif hasattr(model, "get_input_embeddings"):
+
+        def make_inputs_require_grad(module, input, output):
+            output.requires_grad_(True)
+
+        model.get_input_embeddings().register_forward_hook(
+            make_inputs_require_grad)
     return model

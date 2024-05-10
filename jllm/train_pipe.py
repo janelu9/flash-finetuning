@@ -14,8 +14,10 @@ from .utils import (
     set_random_seed,
     get_optimizer_grouped_parameters)
 from .model import (
+    autopartition_transformer,
     convert_linear_layer_to_lora,
     only_optimize_lora_parameters,
+    make_model_gradient_checkpointing_compatible,
     ModelPipe,
     )
 from .trainer import train
@@ -89,7 +91,7 @@ parser.add_argument('--offload',
                     help='Enable ZeRO Offload techniques.') 
 parser.add_argument("--partition_method",
                     type=str,
-                    default= "parameters",
+                    default= "auto",
                     help="partition method")
 parser.add_argument('--num_train_epochs',
                     type=int,
@@ -178,9 +180,10 @@ parser.add_argument('--early_stop',
                     type=int,
                     default=-1,
                     help='if eval loss continuous rebound epoches == early_stop, training will be breaked')              
-parser.add_argument('--no_gradient_checkpointing',
-                    action='store_true',
-                    help='disable gradient checkpointing for decoder layer.')
+parser.add_argument('--checkpoint_interval',
+                    type=int,
+                    default=1,
+                    help='The granularity activation checkpointing in terms of number of layers. 0 disables activation checkpointing.')
 parser.add_argument('--low_mem',
                     action='store_true',
                     help='lower memory usage.')
@@ -225,6 +228,7 @@ args.device = deepspeed.get_accelerator().device_name()
 if args.device == 'npu':
     import torch_npu
     from torch_npu.contrib import transfer_to_npu
+    #import jllm.ascend
 
 def main(args):
     args.local_rank = int(os.environ['LOCAL_RANK'])
@@ -255,6 +259,7 @@ def main(args):
         torch.distributed.barrier()
         args.train_data = cached_dir
     train_data_partitions = [os.path.join(args.train_data,f) for f in os.listdir(args.train_data) if os.path.isdir(os.path.join(args.train_data,f))]
+    args.seq_len = int(open(os.path.join(args.train_data,[f for f in os.listdir(args.train_data) if f[-4:] == '.crc'][0])).read().split()[1])
     if args.eval_data:
         if os.path.isfile(args.eval_data):
             cached_dir = os.path.join(os.path.dirname(args.eval_data),os.path.splitext(os.path.basename(args.eval_data))[0] + f"_{os.path.basename(args.model)}")
@@ -270,15 +275,16 @@ def main(args):
     except:
         config = AutoConfig.from_pretrained(args.model)
     config.block_mask=args.block_mask
-    config.gradient_checkpointing=not args.no_gradient_checkpointing and not args.only_optimize_lora
+    config.checkpoint_interval = args.checkpoint_interval
     config.num_partitions = args.emb_partitions
     config.split_dlayer = args.split_dlayer
     config.device = args.device
+
     torch.distributed.barrier()
     
     topo = ProcessTopology(['data','pipe','model'], [args.data_parallel_size, args.pipe_parallel_size, args.model_parallel_size])
     args.seed = args.seed + topo.get_coord(args.global_rank).pipe
-    
+    args.partition_method = autopartition_transformer(config,args)
     if args.model_parallel_size > 1:
         from jllm.core import parallel_state,tensor_parallel
         parallel_state.initialize_model_parallel(args.model_parallel_size,args.pipe_parallel_size)
@@ -290,16 +296,20 @@ def main(args):
                                               pipeline_dtype=config.torch_dtype
                                              )
         parallel_config.batch_size = args.per_device_train_batch_size
-        parallel_config.seq_length = int(open(os.path.join(args.train_data,[f for f in os.listdir(args.train_data) if f[-4:] == '.crc'][0])).read().split()[1])
+        parallel_config.seq_length = args.seq_len
         parallel_config.low_mem = args.low_mem
         from jllm.model import ModelParallel
-        model =  ModelParallel[config.architectures[0]](
-            config,
-            parallel_config=parallel_config,
-            topology=topo,
-            base_seed=args.seed,
-            partition_method=args.partition_method,
-            )
+        with deepspeed.zero.Init(data_parallel_group=parallel_state.get_data_parallel_group(),
+                         config_dict_or_path=ds_config,
+                         enabled=args.zero_stage == 3,
+                         mpu=parallel_state):
+            model =  ModelParallel[config.architectures[0]](
+                config,
+                parallel_config=parallel_config,
+                topology=topo,
+                base_seed=args.seed,
+                partition_method=args.partition_method,
+                )
     else:
         model = ModelPipe[config.architectures[0]](
             config,
@@ -317,6 +327,8 @@ def main(args):
             args.lora_dim)
         if args.only_optimize_lora:
             model = only_optimize_lora_parameters(model)
+            model = make_model_gradient_checkpointing_compatible(model)
+            
     if "optimizer" not in ds_config:
         optimizer_grouped_parameters = get_optimizer_grouped_parameters(
             model, args.weight_decay)
@@ -351,7 +363,6 @@ def main(args):
         lr_scheduler=lr_scheduler if "scheduler" not in ds_config else None,
         )
       
-
     train(args,engine,train_data_partitions,eval_data_partitions if args.eval_data else None)
     
 

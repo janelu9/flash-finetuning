@@ -124,7 +124,7 @@ def qa_generator(file):
             line = f.readline()
 
 def token_qa(file,tokenizer,MAX_SEQ_LENGTH,ROLE = {},PREFIX = [],ADAPT = []):
-    from .data.utils import qa_inputs_generator
+    from jllm.data.utils import qa_inputs_generator
     for sample in qa_generator(file):
         js = json.loads(sample.strip())
         pmt_anses = js['conversation'] if 'conversation' in js else js

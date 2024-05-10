@@ -6,4 +6,5 @@ accelerate
 flash-attn
 pyarrow
 tiktoken
+#torch_npu # Runing on NPUs
 #vllm
