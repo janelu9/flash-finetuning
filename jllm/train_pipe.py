@@ -171,7 +171,7 @@ parser.add_argument('--skip_epoch',
                     help='checkpoint except the given epoches')
 parser.add_argument('--max_num_checkpoints',
                     type=int,
-                    default=1,
+                    default=2,
                     help='max checkpoint num')
 parser.add_argument('--only_ckpt_model',
                     action='store_true',
@@ -196,6 +196,10 @@ parser.add_argument('--no_safetensor',
 parser.add_argument('--init',
                     action='store_true',
                     help='train from 0')
+parser.add_argument('--cached_model',
+                    type=str,
+                    default=None,
+                    help='cached model dir')
 parser.add_argument("--seed",
                     type=int,
                     default=1234,
@@ -228,7 +232,10 @@ args.device = deepspeed.get_accelerator().device_name()
 if args.device == 'npu':
     import torch_npu
     from torch_npu.contrib import transfer_to_npu
-    #import jllm.ascend
+    args.optimize_recomp_communication_status = 0
+    args.optimize_recomp_communication_level = 2  
+    def get_args():
+        return args
 
 def main(args):
     args.local_rank = int(os.environ['LOCAL_RANK'])
@@ -286,6 +293,8 @@ def main(args):
     args.seed = args.seed + topo.get_coord(args.global_rank).pipe
     args.partition_method = autopartition_transformer(config,args)
     if args.model_parallel_size > 1:
+        if args.device == 'npu':
+            import jllm.ascend
         from jllm.core import parallel_state,tensor_parallel
         parallel_state.initialize_model_parallel(args.model_parallel_size,args.pipe_parallel_size)
         tensor_parallel.model_parallel_cuda_manual_seed(args.seed)
@@ -318,7 +327,7 @@ def main(args):
             partition_method=args.partition_method,
             )
         
-    if not(args.resume_ckpt or args.from_ckpt) and not args.init: model.from_pretrained(args.model)
+    if not(args.resume_ckpt or args.from_ckpt) and not args.init: model.from_pretrained(args.model,args.cached_model)
     
     if args.lora_dim > 0:
         model = convert_linear_layer_to_lora(
