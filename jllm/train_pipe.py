@@ -196,7 +196,7 @@ parser.add_argument('--no_safetensor',
 parser.add_argument('--init',
                     action='store_true',
                     help='train from 0')
-parser.add_argument('--cached_model',
+parser.add_argument('--cache_model',
                     type=str,
                     default=None,
                     help='cached model dir')
@@ -327,7 +327,10 @@ def main(args):
             partition_method=args.partition_method,
             )
         
-    if not(args.resume_ckpt or args.from_ckpt) and not args.init: model.from_pretrained(args.model,args.cached_model)
+    if not(args.resume_ckpt or args.from_ckpt) and not args.init: 
+        model.from_pretrained(args.model,args.cache_model)
+        if args.only_cache_model:
+            return
     
     if args.lora_dim > 0:
         model = convert_linear_layer_to_lora(
