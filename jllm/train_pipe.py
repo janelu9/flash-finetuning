@@ -91,15 +91,15 @@ parser.add_argument('--offload',
                     help='Enable ZeRO Offload techniques.') 
 parser.add_argument("--partition_method",
                     type=str,
-                    default= "auto",
-                    help="partition method")
+                    default= "fast",
+                    help="support 'fast', 'mem' and deepspeed's ")
 parser.add_argument('--num_train_epochs',
                     type=int,
                     default=1,
                     help='train epochs')
 parser.add_argument('--per_device_train_batch_size',
                     type=int,
-                    default=2,
+                    default=1,
                     help='per device train batch_size')
 parser.add_argument('--gradient_accumulation_steps',
                     type=int,

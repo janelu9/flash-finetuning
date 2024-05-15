@@ -18,9 +18,9 @@ Convert the raw data to token ids stored in parquet files.
 
 ```shell
 python -m jllm.raw2ids \
-    --tokenizer baichuan-inc/Baichuan-13B-Chat \
+    --tokenizer Qwen1.5-14B-Chat \
     -i dataset0.jsonl \
-    -o dataset0_Baichuan-13B-Chat
+    -o dataset0_Qwen1.5-14B-Chat
 ```
 
 ***Note**: Samples of pre-train dataset should be separated by `'\n\n'` in text files or be the value of  key`'text'` in jsonl files. Fine-tune dataset's format should be `[{'system':content},{'user':content},{'assistant':content},...] ` in each row of jsonl files, key`'system'` is not necessary.*
@@ -33,14 +33,14 @@ Firstly, move all the datasets stored in parquet folders into one directory. suc
 
 ```shell
 datasets
-├── dataset0_Baichuan-13B-Chat
+├── dataset0_Qwen1.5-14B-Chat
 │   ├── dataset0-00000
 │   │   ├── dataset0-00000-00000.gzip.parquet
 │   │   └── dataset0-00000-00001.gzip.parquet
 │   └── dataset0-00001
 │       ├── dataset0-00001-00000.gzip.parquet
 │       └── dataset0-00001-00001.gzip.parquet
-└── dataset1_Baichuan-13B-Chat
+└── dataset1_Qwen1.5-14B-Chat
     ├── dataset1-00000
     │   ├── dataset1-00000-00000.gzip.parquet
     │   └── dataset1-00000-00001.gzip.parquet
@@ -59,16 +59,16 @@ Every dataset would be shuffled and placed in `shuffled_datasets` with several t
 
 ```shell
 shuffled_datasets/
-├── dataset0_Baichuan-13B-Chat-00000
-│   ├── dataset0_Baichuan-13B-Chat-00000-00000.gzip.parquet
-│   ├── dataset0_Baichuan-13B-Chat-00000-00001.gzip.parquet
-│   ├── dataset0_Baichuan-13B-Chat-00000-00002.gzip.parquet
-│   └── dataset0_Baichuan-13B-Chat-00000-00003.gzip.parquet
-└── dataset1_Baichuan-13B-Chat-00000
-    ├── dataset1_Baichuan-13B-Chat-00000-00000.gzip.parquet
-    ├── dataset1_Baichuan-13B-Chat-00000-00001.gzip.parquet
-    ├── dataset1_Baichuan-13B-Chat-00000-00002.gzip.parquet
-    └── dataset1_Baichuan-13B-Chat-00000-00003.gzip.parquet
+├── dataset0_Qwen1.5-14B-Chat-00000
+│   ├── dataset0_Qwen1.5-14B-Chat-00000-00000.gzip.parquet
+│   ├── dataset0_Qwen1.5-14B-Chat-00000-00001.gzip.parquet
+│   ├── dataset0_Qwen1.5-14B-Chat-00000-00002.gzip.parquet
+│   └── dataset0_Qwen1.5-14B-Chat-00000-00003.gzip.parquet
+└── dataset1_Qwen1.5-14B-Chat-00000
+    ├── dataset1_Qwen1.5-14B-Chat-00000-00000.gzip.parquet
+    ├── dataset1_Qwen1.5-14B-Chat-00000-00001.gzip.parquet
+    ├── dataset1_Qwen1.5-14B-Chat-00000-00002.gzip.parquet
+    └── dataset1_Qwen1.5-14B-Chat-00000-00003.gzip.parquet
 ```
 
 ### Repartition 
@@ -84,17 +84,17 @@ The datasets will be:
 ```shell
 shuffled_datasets/
 ├── 5984729befe338e6a7-part-00000
-│   ├── dataset0_Baichuan-13B-Chat-00000-00000.gzip.parquet
-│   └── dataset1_Baichuan-13B-Chat-00000-00000.gzip.parquet
+│   ├── dataset0_Qwen1.5-14B-Chat-00000-00000.gzip.parquet
+│   └── dataset1_Qwen1.5-14B-Chat-00000-00000.gzip.parquet
 ├── 5984729befe338e6a7-part-00001
-│   ├── dataset0_Baichuan-13B-Chat-00000-00001.gzip.parquet
-│   └── dataset1_Baichuan-13B-Chat-00000-00001.gzip.parquet
+│   ├── dataset0_Qwen1.5-14B-Chat-00000-00001.gzip.parquet
+│   └── dataset1_Qwen1.5-14B-Chat-00000-00001.gzip.parquet
 ├── 5984729befe338e6a7-part-00002
-│   ├── dataset0_Baichuan-13B-Chat-00000-00002.gzip.parquet
-│   └── dataset1_Baichuan-13B-Chat-00000-00002.gzip.parquet
+│   ├── dataset0_Qwen1.5-14B-Chat-00000-00002.gzip.parquet
+│   └── dataset1_Qwen1.5-14B-Chat-00000-00002.gzip.parquet
 ├── 5984729befe338e6a7-part-00003
-│   ├── dataset0_Baichuan-13B-Chat-00000-00003.gzip.parquet
-│   └── dataset1_Baichuan-13B-Chat-00000-00003.gzip.parquet
+│   ├── dataset0_Qwen1.5-14B-Chat-00000-00003.gzip.parquet
+│   └── dataset1_Qwen1.5-14B-Chat-00000-00003.gzip.parquet
 └── data.info
 ```
 
@@ -102,30 +102,34 @@ shuffled_datasets/
 
 ## Model Training
 
-Here are two training examples.
+Here are two training examples. Both GPU and NPU are supported.
 
 ### ZERO
 
 ```shell
 deepspeed -H $HOSTFILE \
     --train_zero.py \
-    --model openlm-research/open_llama_13b \
+    --model Qwen1.5-14B-Chat \
     --train_data dataset0.jsonl
 ```
 
-### Pipeline Parallelism
+### 3D Pipeline Parallelism
 
 ```shell
 deepspeed -H $HOSTFILE \
     --module jllm.train_pipe \
-    --model baichuan-inc/Baichuan-13B-Chat \
+    --model Qwen1.5-14B-Chat \
     --train_data shuffled_datasets \
-    --pipe_parallel_size 8 \
+    --pipe_parallel_size 4 \
+    --model_parallel_size 2 \
     --per_device_train_batch_size 2 \
     --gradient_accumulation_steps 32 \
     --ds_config ds_config.py \
     --checkpoint checkpoint \
-    --max_num_checkpoints 2
+    --max_num_checkpoints 2 \
+    --partition_method fast \
+    --split_dlayer \
+    --checkpoint_interval 2 
 ```
 
 ***Note**: Arguments `train_data` and `eval_data` also support `jsonl` file. Run `python -m jllm.train_pipe -h ` for more arguments.* 
@@ -140,19 +144,19 @@ Convert model's weights in checkpoint to HF format.
 
 ```shell
 deepspeed --module jllm.ckpt2hf \
-	--model baichuan-inc/Baichuan-13B-Chat \
+	--model Qwen1.5-14B-Chat \
 	--pipe_parallel_size 8 \
 	--ckpt checkpoint \
-	--hf Baichuan-13B-Chat-Finetune
+	--hf Qwen1.5-14B-Chat-Finetune
 ```
 
 If your model don't have any `lora` weights, you can also convert the checkpoint without GPUs by:
 
 ```shell
 python -m jllm.nolora_ckpt2hf \
-	--model baichuan-inc/Baichuan-13B-Chat \
+	--model Qwen1.5-14B-Chat \
 	--ckpt checkpoint \
-	--hf Baichuan-13B-Chat-Finetune
+	--hf Qwen1.5-14B-Chat-Finetune
 ```
 
 #### Supported Models
@@ -179,7 +183,7 @@ vLLm is quoted here for Inference.
 
 ```shell
 python batch_infer.py \
-    --model Baichuan-13B-Chat-Finetune \
+    --model Qwen1.5-14B-Chat-Finetune \
     --prompt_file prompt.txt
 ```
 
@@ -188,7 +192,7 @@ python batch_infer.py \
 Start the server:
 
 ```shell
-python server.py --model Baichuan-13B-Chat-Finetune
+python server.py --model Qwen1.5-14B-Chat-Finetune
 ```
 
 Query the model :
