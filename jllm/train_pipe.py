@@ -176,13 +176,16 @@ parser.add_argument('--max_num_checkpoints',
 parser.add_argument('--only_ckpt_model',
                     action='store_true',
                     help='Only checkpoint the model parameters.')
+parser.add_argument('--only_cache_model',
+                    action='store_true',
+                    help='Only cache the model.')
 parser.add_argument('--early_stop',
                     type=int,
                     default=-1,
                     help='if eval loss continuous rebound epoches == early_stop, training will be breaked')              
 parser.add_argument('--checkpoint_interval',
                     type=int,
-                    default=1,
+                    default=0,
                     help='The granularity activation checkpointing in terms of number of layers. 0 disables activation checkpointing.')
 parser.add_argument('--low_mem',
                     action='store_true',
@@ -286,12 +289,12 @@ def main(args):
     config.num_partitions = args.emb_partitions
     config.split_dlayer = args.split_dlayer
     config.device = args.device
-
+    config.partition_method = autopartition_transformer(config,args)
     torch.distributed.barrier()
     
     topo = ProcessTopology(['data','pipe','model'], [args.data_parallel_size, args.pipe_parallel_size, args.model_parallel_size])
     args.seed = args.seed + topo.get_coord(args.global_rank).pipe
-    args.partition_method = autopartition_transformer(config,args)
+    
     if args.model_parallel_size > 1:
         if args.device == 'npu':
             import jllm.ascend
@@ -317,14 +320,14 @@ def main(args):
                 parallel_config=parallel_config,
                 topology=topo,
                 base_seed=args.seed,
-                partition_method=args.partition_method,
+                partition_method=config.partition_method if isinstance(config.partition_method,str) else str(list(range(len(config.partition_method))))[1:-1],
                 )
     else:
         model = ModelPipe[config.architectures[0]](
             config,
             topology=topo,
             base_seed=args.seed,
-            partition_method=args.partition_method,
+            partition_method=config.partition_method if isinstance(config.partition_method,str) else str(list(range(len(config.partition_method))))[1:-1],
             )
         
     if not(args.resume_ckpt or args.from_ckpt) and not args.init: 

@@ -163,15 +163,15 @@ python -m jllm.nolora_ckpt2hf \
 
 |    Model     | Training Speed (tokens/s) |
 | :----------: | :-----------------------: |
-|  llama-13b   |         92749.82          |
-| baichuan-13b |         79765.50          |
-|   qwen-14b   |         80749.57          |
+|  llama-13b   |       92749.82(old)       |
+| baichuan-13b |       79765.50(old)       |
+|   qwen-14b   |       80749.57(old)       |
 
 ***Note**: The training speed of each model was measured on 64 NVIDIA A100-PCIE-40GB GPUs linked by 100Gb/s bandwidth of InfiniBand with data type of bfloat16 and batch token size of 2048\*2048 (batch_size\*sequence_length,  batch_size = micro_batch_size \* gradient_accumulation_steps).*
 
 |  Model   | Training Speed (tokens/s) |
 | :------: | :-----------------------: |
-| llama-7b |         25749.504         |
+| llama-7b |         26335.232         |
 
 ***Note**: Measured on 8 NVIDIA A100-PCIE-40GB GPUs with data type of bfloat16 and batch token size of 2304\*2048.*
 
