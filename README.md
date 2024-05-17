@@ -102,7 +102,7 @@ shuffled_datasets/
 
 ## Model Training
 
-Here are two training examples. Both GPU and NPU are supported.
+Here are two training examples.
 
 ### ZERO
 
@@ -113,15 +113,17 @@ deepspeed -H $HOSTFILE \
     --train_data dataset0.jsonl
 ```
 
-### 3D Pipeline Parallelism
+Both GPU and NPU are supported.
+
+### 3D Parallelism
 
 ```shell
 deepspeed -H $HOSTFILE \
     --module jllm.train_pipe \
     --model Qwen1.5-14B-Chat \
     --train_data shuffled_datasets \
-    --pipe_parallel_size 4 \
-    --model_parallel_size 2 \
+    --pipe_parallel_size 2 \
+    --model_parallel_size 4 \
     --per_device_train_batch_size 2 \
     --gradient_accumulation_steps 32 \
     --ds_config ds_config.py \
@@ -137,6 +139,8 @@ deepspeed -H $HOSTFILE \
 Generally, every GPU process reads one piece of data, that means one node with 8 GPUs will need to allocate a total of 8x CPU memory for data.  But now they need just 1x if these GPUs belong to one pipeline under my special optimizations in this project . **I strongly recommend you to train your model with faster and low-cost Pipeline Parallelism** rather than ZERO. Pipeline engine could directly load and save model's weights in HuggingFace's format. It could also load weights from checkpoint. If you want to resume interruption, any configs related to training shouldn't be modified. 
 
 The engine was designed to save checkpoint through background process by default to save more time for training. **Don't save checkpoint too frequently** unless you disable checkpoint in background via the argument '`--background_executor none`' to avoid out of CPU memory.
+
+Setting `partition_method` to be`fast` will always get a faster training when memory are enough.
 
 #### Checkpoint Conversion
 
@@ -174,6 +178,12 @@ python -m jllm.nolora_ckpt2hf \
 | llama-7b |         26335.232         |
 
 ***Note**: Measured on 8 NVIDIA A100-PCIE-40GB GPUs with data type of bfloat16 and batch token size of 2304\*2048.*
+
+|   Model    | Training Speed (tokens/s) |
+| :--------: | :-----------------------: |
+| llama3-70b |         40484.864         |
+
+***Note**: Measured on 128 Ascend 910b-HCCS-60GB NPUs with data type of bfloat16 and batch token size of 512\*8192.*
 
 ## Inference
 

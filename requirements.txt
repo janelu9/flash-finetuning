@@ -1,7 +1,7 @@
 protobuf==3.20.3
 sentencepiece
 transformers
-deepspeed
+git+https://github.com/janelu9/DeepSpeed.git@janelu9-patch-1
 accelerate
 flash-attn
 pyarrow
