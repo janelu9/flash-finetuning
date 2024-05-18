@@ -93,6 +93,9 @@ parser.add_argument("--partition_method",
                     type=str,
                     default= "fast",
                     help="support 'fast', 'mem' and deepspeed's ")
+parser.add_argument("--multi_layerspec",
+                    action='store_true',
+                    help='multi layers per stage')
 parser.add_argument('--num_train_epochs',
                     type=int,
                     default=1,
@@ -290,6 +293,11 @@ def main(args):
     config.split_dlayer = args.split_dlayer
     config.device = args.device
     config.partition_method = autopartition_transformer(config,args)
+    config.one_layerspec = not args.multi_layerspec
+    if config.one_layerspec and isinstance(config.partition_method,list):
+        partition_method = str(list(range(len(config.partition_method))))[1:-1]
+    else:
+        partition_method = config.partition_method if isinstance(config.partition_method,str) else str(config.partition_method)[1:-1]
     torch.distributed.barrier()
     
     topo = ProcessTopology(['data','pipe','model'], [args.data_parallel_size, args.pipe_parallel_size, args.model_parallel_size])
@@ -320,14 +328,14 @@ def main(args):
                 parallel_config=parallel_config,
                 topology=topo,
                 base_seed=args.seed,
-                partition_method=config.partition_method if isinstance(config.partition_method,str) else str(list(range(len(config.partition_method))))[1:-1],
+                partition_method=partition_method,
                 )
     else:
         model = ModelPipe[config.architectures[0]](
             config,
             topology=topo,
             base_seed=args.seed,
-            partition_method=config.partition_method if isinstance(config.partition_method,str) else str(list(range(len(config.partition_method))))[1:-1],
+            partition_method=partition_method,
             )
         
     if not(args.resume_ckpt or args.from_ckpt) and not args.init: 
