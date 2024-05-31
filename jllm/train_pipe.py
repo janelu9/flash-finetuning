@@ -366,10 +366,9 @@ def main(args):
     That may cause "num_update_steps_per_epoch" to be un-precision. But it donesn't matter.
     ''' 
     num_train_batch =sum(
-        np.ceil(float(open(os.path.join(args.train_data,f)).read().split()[0])/args.per_device_train_batch_size/args.data_parallel_size)
+        int(open(os.path.join(args.train_data,f)).read().split()[0])//args.per_device_train_batch_size//args.data_parallel_size
         for f in os.listdir(args.train_data) if f[-4:] == '.crc') 
-    num_update_steps_per_epoch = np.ceil(
-        num_train_batch / args.gradient_accumulation_steps ) + len(train_data_partitions) - 1
+    num_update_steps_per_epoch = num_train_batch // args.gradient_accumulation_steps + len(train_data_partitions) - 1
     args.num_training_steps = int(args.num_train_epochs * num_update_steps_per_epoch)
     if 'scheduler' not in ds_config:
         lr_scheduler = get_scheduler(

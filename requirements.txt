@@ -1,9 +1,9 @@
 protobuf==3.20.3
 sentencepiece
 transformers
-git+https://github.com/janelu9/DeepSpeed.git@janelu9-patch-1
+git+https://gitee.com/janelu9/DeepSpeed.git@janelu9-patch-1 #https://github.com/janelu9/DeepSpeed.git@janelu9-patch-1
 accelerate
-flash-attn
+#flash-attn # Install the wheel package downloaded from https://github.com/Dao-AILab/flash-attention/releases
 pyarrow
 tiktoken
 #torch_npu # Runing on NPUs
