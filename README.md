@@ -122,8 +122,8 @@ deepspeed -H $HOSTFILE \
     --module jllm.train_pipe \
     --model Qwen1.5-14B-Chat \
     --train_data shuffled_datasets \
-    --pipe_parallel_size 2 \
-    --model_parallel_size 4 \
+    --pipe_parallel_size 8 \
+    --model_parallel_size 1 \
     --per_device_train_batch_size 2 \
     --gradient_accumulation_steps 32 \
     --ds_config ds_config.py \
