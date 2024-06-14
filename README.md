@@ -179,12 +179,6 @@ python -m jllm.nolora_ckpt2hf \
 
 ***Note**: Measured on 8 NVIDIA A100-PCIE-40GB GPUs with data type of bfloat16 and batch token size of 2304\*2048.*
 
-|   Model    | Training Speed (tokens/s) |
-| :--------: | :-----------------------: |
-| llama3-70b |         40484.864         |
-
-***Note**: Measured on 128 Ascend 910b-HCCS-60GB NPUs with data type of bfloat16 and batch token size of 512\*8192.*
-
 ## Inference
 
 vLLm is quoted here for Inference.
