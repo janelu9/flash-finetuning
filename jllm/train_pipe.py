@@ -70,6 +70,10 @@ parser.add_argument('--zero_stage',
 parser.add_argument('--split_dlayer',
                     action='store_true',
                     help='split decoder layers')
+parser.add_argument('--num_layers_per_decoder',
+                    type=int,
+                    default=None,
+                    help='num layers inner one decoder layer')
 parser.add_argument('--emb_partitions',
                     type=int,
                     default=1,
@@ -292,7 +296,14 @@ def main(args):
     config.num_partitions = args.emb_partitions
     config.split_dlayer = args.split_dlayer
     config.device = args.device
-    config.partition_method = autopartition_transformer(config,args)
+    if args.num_layers_per_decoder:
+        config.split_dlayer = True
+        config.num_layers_per_decoder=args.num_layers_per_decoder
+        config.num_hidden_layers=config.num_hidden_layers*args.num_layers_per_decoder//2
+        config.partition_method = autopartition_transformer(config,args)
+        config.num_hidden_layers=config.num_hidden_layers//args.num_layers_per_decoder*2
+    else:
+        config.partition_method = autopartition_transformer(config,args)
     config.one_layerspec = not args.multi_layerspec
     if config.one_layerspec and isinstance(config.partition_method,list):
         partition_method = str(list(range(len(config.partition_method))))[1:-1]
