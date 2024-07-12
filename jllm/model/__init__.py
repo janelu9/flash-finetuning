@@ -6,6 +6,8 @@ from .lora import convert_linear_layer_to_lora,_z3_params_to_fetch,convert_lora_
 from .llama.parallel_llama import LlamaForCausalLMPipe as LlamaForCausalLMParallel
 from .qwen2.parallel_qwen2 import Qwen2ForCausalLMPipe as Qwen2ForCausalLMParallel
 from .qwen2.pipeline_qwen2_moe import Qwen2MoeForCausalLMPipe
+from .intern.pipeline_internvl2 import InterenVL2ForCausalLMPipe
+from .intern.pipeline_internlm2 import InternLM2ForCausalLMPipe
 
 ModelPipe = {
     'LlamaForCausalLM':LlamaForCausalLMPipe,
@@ -14,6 +16,8 @@ ModelPipe = {
     'QWenForClassCausalLM':QWenForClassCausalLMPipe,
     'BaichuanForCausalLM':BaichuanForCausalLMPipe,
     'Qwen2MoeForCausalLM':Qwen2MoeForCausalLMPipe,
+    'InternVLChatModel':InterenVL2ForCausalLMPipe,
+    'InternLM2ForCausalLM':InternLM2ForCausalLMPipe
 }
     
 ModelParallel = {

@@ -86,6 +86,10 @@ parser.add_argument('--pipe_parallel_size',
                     type=int,
                     default=1,
                     help='pipe parallel size')
+parser.add_argument('--encoder_pipe_parallel_size',
+                    type=int,
+                    default=0,
+                    help="encoder's pipe parallel size")
 parser.add_argument('--model_parallel_size',
                     type=int,
                     default=1,
@@ -296,6 +300,7 @@ def main(args):
     config.num_partitions = args.emb_partitions
     config.split_dlayer = args.split_dlayer
     config.device = args.device
+    config.encoder_pipe_parallel_size = args.encoder_pipe_parallel_size
     if args.num_layers_per_decoder:
         config.split_dlayer = True
         config.num_layers_per_decoder=args.num_layers_per_decoder
@@ -303,12 +308,23 @@ def main(args):
         config.partition_method = autopartition_transformer(config,args)
         config.num_hidden_layers=config.num_hidden_layers//args.num_layers_per_decoder*2
     else:
-        config.partition_method = autopartition_transformer(config,args)
+        config.partition_method = autopartition_transformer(getattr(config,'llm_config',config),args)
     config.one_layerspec = not args.multi_layerspec
-    if config.one_layerspec and isinstance(config.partition_method,list):
-        partition_method = str(list(range(len(config.partition_method))))[1:-1]
+    
+    if isinstance(config.partition_method,str) and ',' not in config.partition_method:
+        partition_method = config.partition_method
+    elif config.one_layerspec :
+        if isinstance(config.partition_method,str):
+            config.partition_method = config.partition_method.split(',')
+        if args.pipe_parallel_size == 1:
+            partition_method = 'uniform'
+        elif hasattr(config,'vision_config') and args.encoder_pipe_parallel_size == 0:
+            partition_method = str([0]+list(range(2,2+len(config.partition_method))))[1:-1]
+        else:
+            partition_method = str(list(range(args.encoder_pipe_parallel_size+len(config.partition_method))))[1:-1]
     else:
-        partition_method = config.partition_method if isinstance(config.partition_method,str) else str(config.partition_method)[1:-1]
+        partition_method = str(config.partition_method)[1:-1]
+ 
     torch.distributed.barrier()
     
     topo = ProcessTopology(['data','pipe','model'], [args.data_parallel_size, args.pipe_parallel_size, args.model_parallel_size])
