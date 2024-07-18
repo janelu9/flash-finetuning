@@ -25,6 +25,19 @@ python -m jllm.raw2ids \
 
 ***Note**: Samples of pre-train dataset should be separated by `'\n\n'` in text files or be the value of  key`'text'` in jsonl files. Fine-tune dataset's format should be `[{'system':content},{'user':content},{'assistant':content},...] ` in each row of jsonl files, key`'system'` is not necessary.*
 
+For Vision Language Model:
+
+```shell
+python -m jllm.raw2ids \
+    --tokenizer InternVL2-8B \
+    -i dataset_vl.jsonl \
+    --image_path images
+```
+
+Folder `images` stores all the images data.  Format of  `dataset_vl.jsonl` is like:
+
+`[{'user':['Give a description of these pictures please.\n <image>....','image0.jpg',...]},{'assistant':'This is ....'}]`
+
 ### Shuffle
 
 If you have multiple datasets, you shouldn't skip this step. It could shuffle all the datasets globally by rows like [Spark](https://spark.apache.org) doing. 
