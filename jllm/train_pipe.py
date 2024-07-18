@@ -301,6 +301,7 @@ def main(args):
     config.split_dlayer = args.split_dlayer
     config.device = args.device
     config.encoder_pipe_parallel_size = args.encoder_pipe_parallel_size
+    args.image_size = getattr(config,'force_image_size',None)
     if args.num_layers_per_decoder:
         config.split_dlayer = True
         config.num_layers_per_decoder=args.num_layers_per_decoder

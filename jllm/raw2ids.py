@@ -166,17 +166,17 @@ def token_qa(file,tokenizer,MAX_SEQ_LENGTH,ROLE = {},PREFIX = [],ADAPT = []):
                 divide.append(len(ids))
                 
             if len(divide)>2 :
-                for qa_inputs in qa_inputs_generator(ids,
-                                                     divide,
-                                                     MAX_SEQ_LENGTH,
-                                                     MAX_HISTORY_LENGTH = MAX_SEQ_LENGTH//2,
-                                                     pad_token_id = tokenizer.pad_token_id,
-                                                     IGNORE_TOKEN_ID = -100):
+                for qa_inputs,_ in qa_inputs_generator(ids,
+                                                       divide,
+                                                       MAX_SEQ_LENGTH,
+                                                       MAX_HISTORY_LENGTH = MAX_SEQ_LENGTH//2,
+                                                       pad_token_id = tokenizer.pad_token_id,
+                                                       IGNORE_TOKEN_ID = -100):
                     if 'category' in js:
                         qa_inputs.update({"prompt_len":divide[1],"classes":int(js['category'])})
                     yield qa_inputs
    
-def write_parquet(filename,output_dir,tokenizer,MAX_SEQ_LENGTH=2048,dtype='qa',batch_size=2**15,compression='gzip',stack=False,max_num=1):
+def write_parquet(filename,output_dir,tokenizer,MAX_SEQ_LENGTH=2048,dtype='qa',batch_size=2**15,compression='gzip',stack=False,max_num=1,image_path=''):
     
     tokenizer = AutoTokenizer.from_pretrained(tokenizer,use_fast=True,trust_remote_code=True,add_bos_token = False)
     tokenizer_class = tokenizer.__class__.__name__ 
@@ -186,7 +186,7 @@ def write_parquet(filename,output_dir,tokenizer,MAX_SEQ_LENGTH=2048,dtype='qa',b
         if not hasattr(tokenizer,'get_image_tokens'):
             token = partial(token_qa, ROLE=ROLE, PREFIX=PREFIX, ADAPT=ADAPT)
         else:
-            token = partial(token_vl, ROLE=ROLE, PREFIX=PREFIX, ADAPT=ADAPT, img_reader=ImageReader(max_num=max_num))
+            token = partial(token_vl, ROLE=ROLE, PREFIX=PREFIX, ADAPT=ADAPT, img_reader=ImageReader(max_num=max_num),image_path=image_path)
     else:
         token = partial(token_wiki,stack = stack)
     item_iter = token(filename,tokenizer,MAX_SEQ_LENGTH)
@@ -358,7 +358,7 @@ def build_transform(input_size):
         T.Lambda(lambda img: img.convert('RGB') if img.mode != 'RGB' else img),
         T.Resize((input_size, input_size), interpolation=InterpolationMode.BICUBIC),
         T.Lambda(lambda img:np.array(img).transpose(2,0,1)),
-        T.Lambda(lambda x:(x/255-MEAN)/STD)
+        #T.Lambda(lambda x:(x/255-MEAN)/STD)
     ])
     return transform
     
@@ -449,6 +449,9 @@ def internvl_template(tokenizer):
         config = AutoConfig.from_pretrained(tokenizer.name_or_path,trust_remote_code=True)
         num_image_token = int((config.vision_config.image_size // config.vision_config.patch_size) ** 2 * (config.downsample_ratio ** 2))
         tokenizer.get_image_tokens = lambda n:'<img>' + '<IMG_CONTEXT>' * n * num_image_token + '</img>'
+        #tokenizer.img_context_token_id = tokenizer.convert_tokens_to_ids('<IMG_CONTEXT>')
+        tokenizer.img_bos_token_id = tokenizer.convert_tokens_to_ids('<img>')
+        tokenizer.img_eos_token_id = tokenizer.convert_tokens_to_ids('</img>')
     except:
         print('only llm!')
     
@@ -465,21 +468,24 @@ TOKENIZER = {
 }
 
 def token_vl(tet_file,tokenizer,MAX_SEQ_LENGTH,ROLE = {},PREFIX = [],ADAPT = []
-             ,img_reader=None):
+             ,img_reader=None,image_path=''):
 
-    from jllm.data.utils import qa_inputs_generator
+    from jllm.data.utils import qa_inputs_generator,img_token_alignment
     
     def replace_image_token(v):
         if not isinstance(v,str):
             v,*imgs = v
             pixes = []
             for img in imgs:
-                pix_v = img_reader(img)
-                pixes.append(pix_v)
-                image_tokens = tokenizer.get_image_tokens(pix_v.shape[0])
-                v=v.replace('<image>', image_tokens,1)
-            return v,pixes
-        return v,[np.empty(0,dtype=np.int8)]
+                try:
+                    pix_v = img_reader(os.path.join(image_path,img))
+                    image_tokens = tokenizer.get_image_tokens(pix_v.shape[0])
+                    v=v.replace('<image>', image_tokens,1)
+                    pixes.append(pix_v.reshape(-1))
+                except:
+                    v=v.replace('<image>', '<图片>',1)
+            return v,pixes if pixes else [np.empty(0,dtype=np.uint8)]
+        return v,[np.empty(0,dtype=np.uint8)]
 
     for sample in qa_generator(file):
         js = json.loads(sample.strip())
@@ -498,16 +504,16 @@ def token_vl(tet_file,tokenizer,MAX_SEQ_LENGTH,ROLE = {},PREFIX = [],ADAPT = []
                     
             if k != 'system':
                 ids = ADAPT + ids
-                pixes.extend(p)
+                pixes.append(p)
             
             for msg in msgs[start+1:]:
                 k,v = next(iter(msg.items()))
                 v,p = replace_image_token(v)
                 if k != pre_k:
                     if k != "assistant":
+                        pixes.append(p)
                         ids.append(tokenizer.im_end_id)
                         if pre_k != "system":
-                            pixes.extend(p)
                             divide.append(len(ids))
                     ids.extend(ROLE[k])
                     if k == "assistant":
@@ -526,14 +532,15 @@ def token_vl(tet_file,tokenizer,MAX_SEQ_LENGTH,ROLE = {},PREFIX = [],ADAPT = []
                 divide.append(len(ids))
                 
             if len(divide)>2 :
-                for qa_inputs in qa_inputs_generator(ids,
-                                                     divide,
-                                                     MAX_SEQ_LENGTH,
-                                                     MAX_HISTORY_LENGTH = MAX_SEQ_LENGTH//2,
-                                                     pad_token_id = tokenizer.pad_token_id,
-                                                     IGNORE_TOKEN_ID = -100):
-                    qa_inputs.update({'images':pixes})
-                    yield qa_inputs
+                for qa_inputs,sub_divide in qa_inputs_generator(ids,
+                                                                divide,
+                                                                MAX_SEQ_LENGTH,
+                                                                MAX_HISTORY_LENGTH = MAX_SEQ_LENGTH//2,
+                                                                pad_token_id = tokenizer.pad_token_id,
+                                                                IGNORE_TOKEN_ID = -100):
+                    qa_vl_inputs = img_token_alignment(tokenizer,qa_inputs,pixes,sub_divide,divide)
+                    if qa_vl_inputs is not None:
+                        yield qa_vl_inputs
 
 if __name__=='__main__':
     parser = argparse.ArgumentParser()
@@ -547,6 +554,7 @@ if __name__=='__main__':
     parser.add_argument('--cores', type=int, default=-1)
     parser.add_argument('--max_num', type=int, default=1)
     parser.add_argument('--tokenizer', type=str, default="openlm-research/open_llama_13b")
+    parser.add_argument('--image_path', type=str, default="")
     parser.add_argument('--tmp', type=str, default="tmp")
     parser.add_argument('--stack', action='store_true', help="stack tokens")
     parser.add_argument('-T', action='store_true', help="thread")
@@ -585,7 +593,8 @@ if __name__=='__main__':
                        batch_size=args.batch_size,
                        compression=args.c.lower(),
                        stack=args.stack,
-                       max_num=args.max_num)
+                       max_num=args.max_num,
+                       image_path=args.image_path)
         files =[os.path.join(tmp, i) for i in os.listdir(tmp)]
         files.sort()
         np.random.shuffle(files)
@@ -597,7 +606,7 @@ if __name__=='__main__':
     # head -n2 news-commentary-v13-zh-en.txt
     1929年还是1989年?   1929 or 1989?
     巴黎-随着经济危机不断加深和蔓延，整个世界一直在寻找历史上的类似事件希望有助于我们了解目前正在发生的情况。   PARIS – As the economic crisis deepens and widens, the world has been searching for historical analogies to help us understand what has been happening.
-    # python convert_raws_to_ids.py -i news-commentary-v13-zh-en.txt -n 30000
+    # python convert_raw2ids.py -i news-commentary-v13-zh-en.txt -n 30000
     Namespace(t='qa', i='news-commentary-v13-zh-en.txt', o='', n=30000, c='gzip', batch_size=32768, cores=-1, tokenizer='openlm-research/open_llama_13b', tmp='tmp', T=False, C=False)
     /mnt/e/NLP
     ########## begine converting qa data with 12 executors.###########
