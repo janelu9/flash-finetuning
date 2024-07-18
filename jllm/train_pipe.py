@@ -15,6 +15,7 @@ from .utils import (
     get_optimizer_grouped_parameters)
 from .model import (
     autopartition_transformer,
+    autopartition_decoder,
     convert_linear_layer_to_lora,
     only_optimize_lora_parameters,
     make_model_gradient_checkpointing_compatible,
@@ -309,7 +310,10 @@ def main(args):
         config.partition_method = autopartition_transformer(config,args)
         config.num_hidden_layers=config.num_hidden_layers//args.num_layers_per_decoder*2
     else:
-        config.partition_method = autopartition_transformer(getattr(config,'llm_config',config),args)
+        if hasattr(config,'llm_config'):
+            config.partition_method = autopartition_decoder(config.llm_config,args)
+        else:
+            config.partition_method = autopartition_transformer(config,args)
     config.one_layerspec = not args.multi_layerspec
     
     if isinstance(config.partition_method,str) and ',' not in config.partition_method:

@@ -459,6 +459,7 @@ def internvl_template(tokenizer):
 
 TOKENIZER = {
     'LlamaTokenizer':llama_template,
+    'LlamaTokenizerFast':llama_template,
     'PreTrainedTokenizerFast':llama3_template,
     'QWenTokenizer':qwen_template,
     'Qwen2TokenizerFast':qwen2_template,
