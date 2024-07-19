@@ -181,12 +181,13 @@ def write_parquet(filename,output_dir,tokenizer,MAX_SEQ_LENGTH=2048,dtype='qa',b
     tokenizer = AutoTokenizer.from_pretrained(tokenizer,use_fast=True,trust_remote_code=True,add_bos_token = False)
     tokenizer_class = tokenizer.__class__.__name__ 
     tokenizer,ROLE,PREFIX,ADAPT = TOKENIZER[tokenizer_class](tokenizer)
-
+    auto_batch_size = False
     if dtype == 'qa':
         if not hasattr(tokenizer,'get_image_tokens'):
             token = partial(token_qa, ROLE=ROLE, PREFIX=PREFIX, ADAPT=ADAPT)
         else:
             token = partial(token_vl, ROLE=ROLE, PREFIX=PREFIX, ADAPT=ADAPT, img_reader=ImageReader(max_num=max_num),image_path=image_path)
+            auto_batch_size = True
     else:
         token = partial(token_wiki,stack = stack)
     item_iter = token(filename,tokenizer,MAX_SEQ_LENGTH)
@@ -199,52 +200,74 @@ def write_parquet(filename,output_dir,tokenizer,MAX_SEQ_LENGTH=2048,dtype='qa',b
         return
     if not os.path.exists(partition_dir):
         os.makedirs(partition_dir)
-        
-    pbar = tqdm.tqdm(float("inf"))
-    data = next(item_iter)
-    data_batch={k:[data[k]] for k in data}
-    i=1
-    pbar.update(1)
-    while True:
-        try:
-            for _ in range(batch_size-1):
+
+    if not auto_batch_size:
+        pbar = tqdm.tqdm(float("inf"))
+        data = next(item_iter)
+        data_batch={k:[data[k]] for k in data}
+        i=0
+        pbar.update(1)
+        while True:
+            try:
+                for _ in range(batch_size-1):
+                    data = next(item_iter)
+                    for k in data:data_batch[k].append(data[k])
+                    i+=1
+                    pbar.update(1)
+                    
+                pyarrow.parquet.write_table(pyarrow.table(data_batch),
+                                            partition_file % (i//batch_size), 
+                                            compression=compression)
+                del data_batch
+                gc.collect()
+                data_batch = None
+                
                 data = next(item_iter)
-                for k in data:data_batch[k].append(data[k])
+                data_batch={k:[data[k]] for k in data}
                 i+=1
                 pbar.update(1)
                 
+            except StopIteration:
+                pbar.close()
+                break
+                
+        if data_batch :
             pyarrow.parquet.write_table(pyarrow.table(data_batch),
                                         partition_file % (i//batch_size), 
                                         compression=compression)
-            del data_batch
-            gc.collect()
-            
-            data = next(item_iter)
-            data_batch={k:[data[k]] for k in data}
+    else:
+        pbar = tqdm.tqdm(float("inf"))
+        element_num_limit = 2e10
+        data = next(item_iter)
+        data_batch={k:[data[k]] for k in data}
+        element_num = sum(data[k].size for k in data)
+        i=0
+        p=0
+        pbar.update(1)
+        for data in item_iter:
             i+=1
             pbar.update(1)
-            
-        except StopIteration:
-            pbar.close()
-            break
-                                        
-    # for i,data in tqdm.tqdm(enumerate(item_iter)):
-        # for k in data: data_batch[k].append(data[k])
-        # if (i+1) % batch_size == 0 :
-            # pyarrow.parquet.write_table(pyarrow.table(data_batch[k] for k in data], names=list(data.keys())),
-                                        # partition_file % (i//batch_size), 
-                                        # compression=compression)            
-            # del data_batch
-            # gc.collect()
-            # data_batch={k:[] for k in data}
-            
-    if len(data_batch[list(data.keys())[0]]) != batch_size-1:
-        pyarrow.parquet.write_table(pyarrow.table(data_batch),
-                                    partition_file % (i//batch_size), 
-                                    compression=compression)
+            for k in data: 
+                data_batch[k].append(data[k])
+                element_num+=data[k].size 
+            if element_num > element_num_limit:
+                pyarrow.parquet.write_table(pyarrow.table(data_batch),
+                                            partition_file % (p),
+                                            compression=compression)
+                p+=1
+                del data_batch
+                gc.collect()
+                data_batch={k:[] for k in data}
+                element_num = 0
+        pbar.close()       
+        if data_batch[k] :
+            pyarrow.parquet.write_table(pyarrow.table(data_batch),
+                                        partition_file % (p), 
+                                        compression=compression) 
+
     del data_batch                                
-    os.system(f"echo '{i} {MAX_SEQ_LENGTH} {batch_size} {len(data.keys())}' > {check_file}")
-    print(f"{filename} stored in parquet with {i} samples")
+    os.system(f"echo '{i+1} {MAX_SEQ_LENGTH} {batch_size} {len(data.keys())}' > {check_file}")
+    print(f"{filename} stored in parquet with {i+1} samples")
     gc.collect()
     
 def llama_template(tokenizer):
@@ -468,7 +491,7 @@ TOKENIZER = {
     'InternLM2TokenizerFast':internvl_template
 }
 
-def token_vl(tet_file,tokenizer,MAX_SEQ_LENGTH,ROLE = {},PREFIX = [],ADAPT = []
+def token_vl(file,tokenizer,MAX_SEQ_LENGTH,ROLE = {},PREFIX = [],ADAPT = []
              ,img_reader=None,image_path=''):
 
     from jllm.data.utils import qa_inputs_generator,img_token_alignment
@@ -541,26 +564,10 @@ def token_vl(tet_file,tokenizer,MAX_SEQ_LENGTH,ROLE = {},PREFIX = [],ADAPT = []
                                                                 IGNORE_TOKEN_ID = -100):
                     qa_vl_inputs = img_token_alignment(tokenizer,qa_inputs,pixes,sub_divide,divide)
                     if qa_vl_inputs is not None:
+                        qa_vl_inputs['images'] = np.hstack(qa_vl_inputs['images'])
                         yield qa_vl_inputs
 
-if __name__=='__main__':
-    parser = argparse.ArgumentParser()
-    parser.add_argument('-t', type=str, default="qa")
-    parser.add_argument('-i', type=str, default="data.txt")
-    parser.add_argument('-o', type=str, default="")
-    parser.add_argument('-n', type=int, default=2**23)
-    parser.add_argument('-c', type=str, default="gzip",choices=('gzip','brotli','snappy','lz4','zstd'))
-    parser.add_argument('--batch_size', type=int, default=2**16)
-    parser.add_argument('--seq_len', type=int, default=2**11)
-    parser.add_argument('--cores', type=int, default=-1)
-    parser.add_argument('--max_num', type=int, default=1)
-    parser.add_argument('--tokenizer', type=str, default="openlm-research/open_llama_13b")
-    parser.add_argument('--image_path', type=str, default="")
-    parser.add_argument('--tmp', type=str, default="tmp")
-    parser.add_argument('--stack', action='store_true', help="stack tokens")
-    parser.add_argument('-T', action='store_true', help="thread")
-    parser.add_argument('-C', action='store_true', help="clean")
-    args = parser.parse_args()
+def main(args):
     print(args)
     source=os.path.abspath(args.i)
     source_dir=os.path.dirname(source)
@@ -631,3 +638,23 @@ if __name__=='__main__':
     /mnt/e/NLP/tmp/news-commentary-v13-zh-en-part-03 saved with 30000 samples
     /mnt/e/NLP/news-commentary-v13-zh-en.txt has been converted into /mnt/e/NLP/news-commentary-v13-zh-en_open_llama_13b successfully!
     '''
+parser = argparse.ArgumentParser()
+parser.add_argument('-t', type=str, default="qa")
+parser.add_argument('-i', type=str, default="data.txt")
+parser.add_argument('-o', type=str, default="")
+parser.add_argument('-n', type=int, default=2**23)
+parser.add_argument('-c', type=str, default="gzip",choices=('gzip','brotli','snappy','lz4','zstd'))
+parser.add_argument('--batch_size', type=int, default=2**16)
+parser.add_argument('--seq_len', type=int, default=2**11)
+parser.add_argument('--cores', type=int, default=-1)
+parser.add_argument('--max_num', type=int, default=1)
+parser.add_argument('--tokenizer', type=str, default="openlm-research/open_llama_13b")
+parser.add_argument('--image_path', type=str, default="")
+parser.add_argument('--tmp', type=str, default="tmp")
+parser.add_argument('--stack', action='store_true', help="stack tokens")
+parser.add_argument('-T', action='store_true', help="thread")
+parser.add_argument('-C', action='store_true', help="clean")
+args = parser.parse_args()
+
+if __name__=='__main__':
+    main(args)
