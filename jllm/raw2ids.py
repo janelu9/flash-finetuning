@@ -18,6 +18,7 @@ import gc
 IGNORE_TOKEN_ID: int = -100
 OVERLAPPING_LENGTH: int  = 1
 SPLIT_LENGTH: int = 131072
+NUM_ELEMENT_LIMIT = 2e10
 
 def clean_wikitext(string):
     """TODO"""
@@ -207,8 +208,8 @@ def write_parquet(filename,output_dir,tokenizer,MAX_SEQ_LENGTH=2048,dtype='qa',b
         data_batch={k:[data[k]] for k in data}
         i=0
         pbar.update(1)
-        while True:
-            try:
+        try:
+            while True:
                 for _ in range(batch_size-1):
                     data = next(item_iter)
                     for k in data:data_batch[k].append(data[k])
@@ -227,9 +228,8 @@ def write_parquet(filename,output_dir,tokenizer,MAX_SEQ_LENGTH=2048,dtype='qa',b
                 i+=1
                 pbar.update(1)
                 
-            except StopIteration:
-                pbar.close()
-                break
+        except StopIteration:
+            pbar.close()
                 
         if data_batch :
             pyarrow.parquet.write_table(pyarrow.table(data_batch),
@@ -237,7 +237,6 @@ def write_parquet(filename,output_dir,tokenizer,MAX_SEQ_LENGTH=2048,dtype='qa',b
                                         compression=compression)
     else:
         pbar = tqdm.tqdm(float("inf"))
-        element_num_limit = 2e10
         data = next(item_iter)
         data_batch={k:[data[k]] for k in data}
         element_num = sum(data[k].size for k in data)
@@ -250,7 +249,7 @@ def write_parquet(filename,output_dir,tokenizer,MAX_SEQ_LENGTH=2048,dtype='qa',b
             for k in data: 
                 data_batch[k].append(data[k])
                 element_num+=data[k].size 
-            if element_num > element_num_limit:
+            if element_num > NUM_ELEMENT_LIMIT:
                 pyarrow.parquet.write_table(pyarrow.table(data_batch),
                                             partition_file % (p),
                                             compression=compression)
