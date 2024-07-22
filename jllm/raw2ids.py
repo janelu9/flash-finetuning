@@ -18,7 +18,7 @@ import gc
 IGNORE_TOKEN_ID: int = -100
 OVERLAPPING_LENGTH: int  = 1
 SPLIT_LENGTH: int = 131072
-NUM_ELEMENT_LIMIT = 2e10
+NUM_ELEMENT_LIMIT = 2e9
 
 def clean_wikitext(string):
     """TODO"""
@@ -613,7 +613,7 @@ def main(args):
     # head -n2 news-commentary-v13-zh-en.txt
     1929年还是1989年?   1929 or 1989?
     巴黎-随着经济危机不断加深和蔓延，整个世界一直在寻找历史上的类似事件希望有助于我们了解目前正在发生的情况。   PARIS – As the economic crisis deepens and widens, the world has been searching for historical analogies to help us understand what has been happening.
-    # python convert_raw2ids.py -i news-commentary-v13-zh-en.txt -n 30000
+    # python raw2ids.py -i news-commentary-v13-zh-en.txt -n 30000
     Namespace(t='qa', i='news-commentary-v13-zh-en.txt', o='', n=30000, c='gzip', batch_size=32768, cores=-1, tokenizer='openlm-research/open_llama_13b', tmp='tmp', T=False, C=False)
     /mnt/e/NLP
     ########## begine converting qa data with 12 executors.###########
