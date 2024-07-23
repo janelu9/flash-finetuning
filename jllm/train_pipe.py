@@ -91,6 +91,10 @@ parser.add_argument('--encoder_pipe_parallel_size',
                     type=int,
                     default=0,
                     help="encoder's pipe parallel size")
+parser.add_argument('--max_num_images',
+                    type=int,
+                    default=16,
+                    help="num images per sample")
 parser.add_argument('--model_parallel_size',
                     type=int,
                     default=1,
@@ -303,6 +307,7 @@ def main(args):
     config.device = args.device
     config.encoder_pipe_parallel_size = args.encoder_pipe_parallel_size
     args.image_size = getattr(config,'force_image_size',None)
+
     if args.num_layers_per_decoder:
         config.split_dlayer = True
         config.num_layers_per_decoder=args.num_layers_per_decoder
