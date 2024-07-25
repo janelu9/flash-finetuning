@@ -1,11 +1,13 @@
 # EasyLLM
 
-Running Large Language Model easily, faster and low-cost.
+Running Large Language Model easily, faster and low-cost. 
+
+Make PCIE as fast as NVlinks.
 
 ## Installation
 
 ```shell
-pip install jllm
+pip wheel -e . --no-deps && pip install jllm-*-py3-none-any.whl
 ```
 
 ## Data Handling

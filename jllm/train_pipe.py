@@ -423,7 +423,67 @@ def main(args):
         )
       
     train(args,engine,train_data_partitions,eval_data_partitions if args.eval_data else None)
+
+from deepspeed.runtime.pipe.module import PipelineModule,logger,ds_utils,LayerSpec,nn
+
+def custom_partition_layers(self, method='uniform'):
+    num_stages = self._topo.get_dim('pipe')
+    stage_id = self._topo.get_coord(self.global_rank).pipe
+
+    if self.global_rank == 0:
+        logger.info(f'Partitioning pipeline stages with method {method}')
+
+    method = method.lower()
+
+    # Each stage gets a simple uniform number of layers.
+    if method == 'uniform':
+        num_layers = len(self._layer_specs)
+        self.parts = ds_utils.partition_uniform(num_items=num_layers, num_parts=num_stages)
+    elif method == 'parameters':
+        param_counts = self._count_layer_params()
+        self.parts = ds_utils.partition_balanced(weights=param_counts, num_parts=num_stages)
+    elif method.startswith('type:'):
+        layertype = method.split(':')[1]
+        binary_weights = [0] * len(self._layer_specs)
+        for idx in self._find_layer_type(layertype):
+            binary_weights[idx] = 1
+        self.parts = ds_utils.partition_balanced(weights=binary_weights, num_parts=num_stages)
+    elif method == 'profile':
+        raise NotImplementedError(f'Partitioning method {method} not implemented.')
+    elif ',' in method:
+        self.parts = list(map(int,method.split(',')))
+    else:
+        raise NotImplementedError(f'Partitioning method {method} not implemented.')
+
+    # Print some information on the partitioning.
+    if self.global_rank == 0:
+        for stage in range(num_stages):
+            start = self.parts[stage]
+            stop = self.parts[stage + 1]
+            print(f'stage={stage} layers={stop - start}')
+            for idx, layer in enumerate(self._layer_specs[start:stop]):
+                name = str(layer)
+                num_layers = ''
+                if isinstance(layer, LayerSpec):
+                    name = layer.typename.__name__
+                    num_layers = layer.module_kwargs.get('num_layers','')
+                if isinstance(layer, nn.Module):
+                    name = layer.__class__.__name__
+                else:
+                    try:
+                        name = layer.__name__
+                    except AttributeError:
+                        pass
+                print(f'    {idx+start:2d}: {name} {num_layers}')
+        if self.loss_fn:
+            try:
+                print(f'  loss: {self.loss_fn.__name__}')
+            except AttributeError:
+                print(f'  loss: {self.loss_fn.__class__.__name__}')
+
+    self._set_bounds(start=self.parts[stage_id], stop=self.parts[stage_id + 1])
     
+PipelineModule._partition_layers = custom_partition_layers
 
 if __name__ == "__main__":
     main(args)
