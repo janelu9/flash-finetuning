@@ -186,7 +186,7 @@ def write_parquet(filename,output_dir,tokenizer,MAX_SEQ_LENGTH=2048,dtype='ft',b
             token = partial(token_vl, ROLE=ROLE, PREFIX=PREFIX, ADAPT=ADAPT, 
                             img_reader=ImageReader(max_num=max_num),
                             image_path=image_path,
-                            output_dir = output_dir if sep else None
+                            sep = output_dir
                             )
             auto_batch_size = True if not sep else False
     else:
@@ -270,11 +270,11 @@ def write_parquet(filename,output_dir,tokenizer,MAX_SEQ_LENGTH=2048,dtype='ft',b
     gc.collect()
 
 def token_vl(file,tokenizer,MAX_SEQ_LENGTH,ROLE = {},PREFIX = [],ADAPT = []
-             ,img_reader=None,image_path='',output_dir = None):
+             ,img_reader=None,image_path='',sep = None):
 
     from jllm.data.utils import qa_inputs_generator,img_token_alignment
     
-    if output_dir is not None:
+    if sep is not None:
         images_database = {}
         def replace_image_token(v):
             if not isinstance(v,str):
@@ -287,18 +287,18 @@ def token_vl(file,tokenizer,MAX_SEQ_LENGTH,ROLE = {},PREFIX = [],ADAPT = []
                             target_aspect_ratio,_ = img_reader.find_closest_aspect_ratio(image)
                             num_patches = target_aspect_ratio[0]*target_aspect_ratio[1]
                             num_patches = num_patches + int(num_patches>1)
-                            key =len(images_database)
+                            # key =len(images_database)
                             image_tokens = tokenizer.get_image_tokens(num_patches)
-                            images_database[img] = (key,image_tokens,target_aspect_ratio,np.array(image).reshape(-1),image.size)
+                            images_database[img] = (image_tokens,target_aspect_ratio)
                         else:
-                            key,image_tokens,*_ = images_database[img]
-                        pixes.append(key)
+                            image_tokens,_ = images_database[img]
                         v=v.replace('<image>', image_tokens,1)
+                        pixes.append(img)
                     except:
-                        pixes.append(-1)
                         v=v.replace('<image>', '<图片>',1)
-                return v,pixes if len(pixes) else [-1]
-            return v,[-1]
+                        pixes.append('')
+                return v,pixes if len(pixes) else ['']
+            return v,['']
     else:
         def replace_image_token(v):
             if not isinstance(v,str):
@@ -377,7 +377,7 @@ def token_vl(file,tokenizer,MAX_SEQ_LENGTH,ROLE = {},PREFIX = [],ADAPT = []
                         si = (si-1)//2
                         ei = (ei-1)//2+1
                         
-                    if not output_dir:
+                    if not sep:
                         qa_vl_inputs = img_token_alignment((tokenizer.img_bos_token_id,tokenizer.img_eos_token_id),qa_inputs,pixes,matched,(si,ei))
                         if qa_vl_inputs is not None:
                             qa_vl_inputs['images'] = np.hstack(qa_vl_inputs['images'])
@@ -385,44 +385,52 @@ def token_vl(file,tokenizer,MAX_SEQ_LENGTH,ROLE = {},PREFIX = [],ADAPT = []
                     else:
                         qa_inputs.update({'image_ids':pixes,'matched':matched,'siei':(si,ei)})
                         yield qa_inputs
-    
-    if output_dir:
-        partition_dir = os.path.join(output_dir+'_images')
-        partition_file = os.path.join(partition_dir , f"part-%05d.gzip.parquet")
-        os.makedirs(partition_dir,exist_ok=True)
-        element_num = 0
-        data = {'id':[],'rat':[],'pic':[],'size':[]}
-        i=-1
-        p=0
-        for i,(k,v) in tqdm.tqdm(enumerate(images_database.items())):
-            data['id'].append(v[0])
-            data['rat'].append(v[2])
-            data['pic'].append(v[3])
-            data['size'].append(v[4])
-            element_num += v[3].size+5
-            if element_num>NUM_ELEMENT_LIMIT:
-                pyarrow.parquet.write_table(pyarrow.table(data),
-                                            partition_file % (p),
-                                            compression='gzip')
-                p+=1
-                del data
-                gc.collect()
-                data = {'id':[],'rat':[],'pic':[],'size':[]}
-                element_num = 0
+    if sep:
+        partition_file = os.path.join(sep , "image.info")
+        data = {'pic':[],'rat':[]}
+        
+        for k,v in images_database.items():
+            data['pic'].append(k)
+            data['rat'].append(v[1])
+        data['pic'].append(os.path.abspath(image_path))
+        data['rat'].append(np.array([tokenizer.img_bos_token_id,tokenizer.img_eos_token_id,img_reader.image_size]))
+        pyarrow.parquet.write_table(pyarrow.table(data),partition_file)
+        print(f"Available pictures: {len(data['pic'])-1}")
+    # if output_dir:
+        # partition_dir = os.path.join(output_dir+'_images')
+        # partition_file = os.path.join(partition_dir , f"part-%05d.gzip.parquet")
+        # os.makedirs(partition_dir,exist_ok=True)
+        # element_num = 0
+        # data = {'id':[],'rat':[],'pic':[],'size':[]}
+        # i=-1
+        # p=0
+        # for i,(k,v) in tqdm.tqdm(enumerate(images_database.items())):
+            # data['id'].append(v[0])
+            # data['rat'].append(v[2])
+            # data['pic'].append(v[3])
+            # data['size'].append(v[4])
+            # element_num += v[3].size+5
+            # if element_num>NUM_ELEMENT_LIMIT:
+                # pyarrow.parquet.write_table(pyarrow.table(data),
+                                            # partition_file % (p),
+                                            # compression='gzip')
+                # p+=1
+                # del data
+                # gc.collect()
+                # data = {'id':[],'rat':[],'pic':[],'size':[]}
+                # element_num = 0
       
-        data['id'].append(tokenizer.img_bos_token_id)
-        data['id'].append(tokenizer.img_eos_token_id)
-        data['id'].append(img_reader.image_size)
-        data['rat'].extend([np.empty(0,dtype=np.int64)]*3)
-        data['pic'].extend([np.empty(0,dtype=np.uint8)]*3)
-        data['size'].extend([np.empty(0,dtype=np.int64)]*3)
-        pyarrow.parquet.write_table(pyarrow.table(data),
-                                    partition_file % (p), 
-                                    compression='gzip') 
+        # data['id'].extend([tokenizer.img_bos_token_id,tokenizer.img_eos_token_id,img_reader.image_size])
+        # data['rat'].extend([np.empty(0,dtype=np.int64)]*3)
+        # data['pic'].extend([np.empty(0,dtype=np.uint8)]*3)
+        # data['size'].extend([np.empty(0,dtype=np.int64)]*3)
+        # pyarrow.parquet.write_table(pyarrow.table(data),
+                                    # partition_file % (p), 
+                                    # compression='gzip')
 
-        del data                                
-        print(f"{partition_dir} stored in parquet with {i+1} pictures")
-        gc.collect()     
+        # del data                                
+        # print(f"{partition_dir} stored in parquet with {i+1} pictures")
+        # gc.collect()     
 
 def main(args):
     print(args)
@@ -656,14 +664,8 @@ class ImageReader:
         target_aspect_ratio,(target_width,target_height) = self.find_closest_aspect_ratio(image)
         # resize the image
         resized_img = image.resize((target_width, target_height))
-        processed_images = []
-        for i in range(target_aspect_ratio[0]):
-            for j in range(target_aspect_ratio[1]):
-                left,upper = i*self.image_size,j*self.image_size
-                right,lower = left+self.image_size,upper+self.image_size
-                # split the image
-                split_img = resized_img.crop((left,upper,right,lower))
-                processed_images.append(split_img)
+        processed_images = [resized_img.crop((i*self.image_size,j*self.image_size,(i+1)*self.image_size,(j+1)*self.image_size)) 
+                            for i in range(target_aspect_ratio[0]) for j in range(target_aspect_ratio[1])]
         #assert len(processed_images) == blocks
         if use_thumbnail and len(processed_images) != 1:
             thumbnail_img = image.resize((self.image_size, self.image_size))

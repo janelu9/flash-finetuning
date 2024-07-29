@@ -33,12 +33,15 @@ For Vision Language Model:
 python -m jllm.raw2ids \
     --tokenizer InternVL2-8B \
     -i dataset_vl.jsonl \
-    --image_path images
+    --image_path images \
+    --sep
 ```
 
 Folder `images` stores all the images data.  Format of  `dataset_vl.jsonl` is like:
 
 `[{'user':['Give a description of these pictures please.\n <image>....','image0.jpg',...]},{'assistant':'This is ....'}]`
+
+`--sep` indicates saving images into parquet separately, less disk spaces will be occupied and patches will be generated during training.
 
 ### Shuffle
 
