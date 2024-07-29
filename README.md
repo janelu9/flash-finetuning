@@ -41,7 +41,7 @@ Folder `images` stores all the images data.  Format of  `dataset_vl.jsonl` is li
 
 `[{'user':['Give a description of these pictures please.\n <image>....','image0.jpg',...]},{'assistant':'This is ....'}]`
 
-`--sep` indicates saving images into parquet separately, less disk spaces will be occupied and patches will be generated during training.
+`--sep` indicates not saving image features into parquet because of large disk space occupation, patches will be generated during training.
 
 ### Shuffle
 
