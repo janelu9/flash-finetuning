@@ -20,17 +20,13 @@ OVERLAPPING_LENGTH: int  = 1
 SPLIT_LENGTH: int = 131072
 NUM_ELEMENT_LIMIT = 2e9
 
-def clean_wikitext(string):
-    """TODO"""
-    return string
-
 def split_doc(doc,bos=True,eos=True):
     p=0;l=len(doc)
     while p<l:
-        yield p == 0 and bos,clean_wikitext(doc[p:p+SPLIT_LENGTH]),(p+SPLIT_LENGTH) >= l and eos
+        yield p == 0 and bos,doc[p:p+SPLIT_LENGTH],(p+SPLIT_LENGTH) >= l and eos
         p += SPLIT_LENGTH - 1
 
-def wiki_generator(file,sep="\n\n"):
+def pretrain_generator(file,sep="\n\n"):
     with open(file,"r") as f:
         doc=""
         line = f.readline()
@@ -59,11 +55,11 @@ def wiki_generator(file,sep="\n\n"):
                 for block in split_doc(doc,bos):
                     yield block
             
-def token_wiki(file,tokenizer,MAX_SEQ_LENGTH,stack=True):
+def token_pretrain(file,tokenizer,MAX_SEQ_LENGTH,stack=True):
     if stack:
         ids = []
         cu_seqlens = [0]
-        for bos,doc,eos in wiki_generator(file):
+        for bos,doc,eos in pretrain_generator(file):
             if bos:
                 if len(ids)>0:cu_seqlens.append(len(ids))
                 ids.append(tokenizer.bos_token_id)
@@ -97,7 +93,7 @@ def token_wiki(file,tokenizer,MAX_SEQ_LENGTH,stack=True):
             input_ids.extend([tokenizer.pad_token_id]*(MAX_SEQ_LENGTH-l))
             yield {'input_ids':np.array(input_ids, dtype=np.int32),'cu_seqlens':np.array(cu_seqlens, dtype=np.int32)}
     else:
-        for bos,doc,eos in wiki_generator(file):
+        for bos,doc,eos in pretrain_generator(file):
             ids = []
             if bos:
                 ids.append(tokenizer.bos_token_id)
@@ -117,16 +113,16 @@ def token_wiki(file,tokenizer,MAX_SEQ_LENGTH,stack=True):
                 input_ids.extend([tokenizer.pad_token_id]*(MAX_SEQ_LENGTH-l))
                 yield {'input_ids':np.array(input_ids, dtype=np.int32)}
         
-def qa_generator(file):
+def finetune_generator(file):
     with open(file,"r") as f:
         line = f.readline()
         while line:
             yield line
             line = f.readline()
 
-def token_qa(file,tokenizer,MAX_SEQ_LENGTH,ROLE = {},PREFIX = [],ADAPT = []):
+def token_finetune(file,tokenizer,MAX_SEQ_LENGTH,ROLE = {},PREFIX = [],ADAPT = []):
     from jllm.data.utils import qa_inputs_generator
-    for sample in qa_generator(file):
+    for sample in finetune_generator(file):
         js = json.loads(sample.strip())
         pmt_anses = js['conversation'] if 'conversation' in js else js
         if len(pmt_anses) > 1:
@@ -177,15 +173,15 @@ def token_qa(file,tokenizer,MAX_SEQ_LENGTH,ROLE = {},PREFIX = [],ADAPT = []):
                         qa_inputs.update({"prompt_len":divide[1],"classes":int(js['category'])})
                     yield qa_inputs
    
-def write_parquet(filename,output_dir,tokenizer,MAX_SEQ_LENGTH=2048,dtype='qa',batch_size=2**15,compression='gzip',stack=False,max_num=1,image_path='',sep=False):
+def write_parquet(filename,output_dir,tokenizer,MAX_SEQ_LENGTH=2048,dtype='ft',batch_size=2**15,compression='gzip',stack=False,max_num=1,image_path='',sep=False):
     
     tokenizer = AutoTokenizer.from_pretrained(tokenizer,use_fast=True,trust_remote_code=True,add_bos_token = False)
     tokenizer_class = tokenizer.__class__.__name__ 
     tokenizer,ROLE,PREFIX,ADAPT = TOKENIZER[tokenizer_class](tokenizer)
     auto_batch_size = False
-    if dtype == 'qa':
+    if dtype == 'ft':
         if not hasattr(tokenizer,'get_image_tokens'):
-            token = partial(token_qa, ROLE=ROLE, PREFIX=PREFIX, ADAPT=ADAPT)
+            token = partial(token_finetune, ROLE=ROLE, PREFIX=PREFIX, ADAPT=ADAPT)
         else:
             token = partial(token_vl, ROLE=ROLE, PREFIX=PREFIX, ADAPT=ADAPT, 
                             img_reader=ImageReader(max_num=max_num),
@@ -194,7 +190,7 @@ def write_parquet(filename,output_dir,tokenizer,MAX_SEQ_LENGTH=2048,dtype='qa',b
                             )
             auto_batch_size = True if not sep else False
     else:
-        token = partial(token_wiki,stack = stack)
+        token = partial(token_pretrain,stack = stack)
     item_iter = token(filename,tokenizer,MAX_SEQ_LENGTH)
     file = os.path.splitext(os.path.basename(filename))[0]
     partition_dir = os.path.join(output_dir , file)
@@ -287,12 +283,15 @@ def token_vl(file,tokenizer,MAX_SEQ_LENGTH,ROLE = {},PREFIX = [],ADAPT = []
                 for img in imgs:
                     try:
                         if img not in images_database:
-                            pix_v = img_reader(os.path.join(image_path,img))
+                            image = Image.open(os.path.join(image_path,img)).convert('RGB')
+                            target_aspect_ratio,_ = img_reader.find_closest_aspect_ratio(image)
+                            num_patches = target_aspect_ratio[0]*target_aspect_ratio[1]
+                            num_patches = num_patches + int(num_patches>1)
                             key =len(images_database)
-                            image_tokens = tokenizer.get_image_tokens(pix_v.shape[0])
-                            images_database[img] = (key,image_tokens,pix_v.reshape(-1))
+                            image_tokens = tokenizer.get_image_tokens(num_patches)
+                            images_database[img] = (key,image_tokens,target_aspect_ratio,np.array(image).reshape(-1),image.size)
                         else:
-                            key,image_tokens,_ = images_database[img]
+                            key,image_tokens,*_ = images_database[img]
                         pixes.append(key)
                         v=v.replace('<image>', image_tokens,1)
                     except:
@@ -316,7 +315,7 @@ def token_vl(file,tokenizer,MAX_SEQ_LENGTH,ROLE = {},PREFIX = [],ADAPT = []
                 return v,pixes if pixes else [np.empty(0,dtype=np.uint8)]
             return v,[np.empty(0,dtype=np.uint8)]
 
-    for sample in qa_generator(file):
+    for sample in finetune_generator(file):
         js = json.loads(sample.strip())
         pmt_anses = js['conversation'] if 'conversation' in js else js
         if len(pmt_anses) > 1:
@@ -392,13 +391,15 @@ def token_vl(file,tokenizer,MAX_SEQ_LENGTH,ROLE = {},PREFIX = [],ADAPT = []
         partition_file = os.path.join(partition_dir , f"part-%05d.gzip.parquet")
         os.makedirs(partition_dir,exist_ok=True)
         element_num = 0
-        data = {'id':[],'pic':[]}
+        data = {'id':[],'rat':[],'pic':[],'size':[]}
         i=-1
         p=0
         for i,(k,v) in tqdm.tqdm(enumerate(images_database.items())):
             data['id'].append(v[0])
-            data['pic'].append(v[-1])
-            element_num += v[-1].size+1
+            data['rat'].append(v[2])
+            data['pic'].append(v[3])
+            data['size'].append(v[4])
+            element_num += v[3].size+5
             if element_num>NUM_ELEMENT_LIMIT:
                 pyarrow.parquet.write_table(pyarrow.table(data),
                                             partition_file % (p),
@@ -406,13 +407,15 @@ def token_vl(file,tokenizer,MAX_SEQ_LENGTH,ROLE = {},PREFIX = [],ADAPT = []
                 p+=1
                 del data
                 gc.collect()
-                data = {'id':[],'pic':[]}
+                data = {'id':[],'rat':[],'pic':[],'size':[]}
                 element_num = 0
       
         data['id'].append(tokenizer.img_bos_token_id)
         data['id'].append(tokenizer.img_eos_token_id)
-        data['pic'].append(np.empty(0,dtype=np.uint8))
-        data['pic'].append(np.empty(0,dtype=np.uint8))
+        data['id'].append(img_reader.image_size)
+        data['rat'].extend([np.empty(0,dtype=np.int64)]*3)
+        data['pic'].extend([np.empty(0,dtype=np.uint8)]*3)
+        data['size'].extend([np.empty(0,dtype=np.int64)]*3)
         pyarrow.parquet.write_table(pyarrow.table(data),
                                     partition_file % (p), 
                                     compression='gzip') 
@@ -470,9 +473,9 @@ def main(args):
     1929年还是1989年?   1929 or 1989?
     巴黎-随着经济危机不断加深和蔓延，整个世界一直在寻找历史上的类似事件希望有助于我们了解目前正在发生的情况。   PARIS – As the economic crisis deepens and widens, the world has been searching for historical analogies to help us understand what has been happening.
     # python raw2ids.py -i news-commentary-v13-zh-en.txt -n 30000
-    Namespace(t='qa', i='news-commentary-v13-zh-en.txt', o='', n=30000, c='gzip', batch_size=32768, cores=-1, tokenizer='openlm-research/open_llama_13b', tmp='tmp', T=False, C=False)
+    Namespace(t='ft', i='news-commentary-v13-zh-en.txt', o='', n=30000, c='gzip', batch_size=32768, cores=-1, tokenizer='openlm-research/open_llama_13b', tmp='tmp', T=False, C=False)
     /mnt/e/NLP
-    ########## begine converting qa data with 12 executors.###########
+    ########## begine converting ft data with 12 executors.###########
     12777it [00:06, 2018.59it/s]
     15178it [00:07, 1980.01it/s]/mnt/e/NLP/tmp/news-commentary-v13-zh-en-part-08 saved with 12777 samples
     30000it [00:14, 2070.87it/s]
@@ -720,7 +723,7 @@ TOKENIZER = {
 
 if __name__=='__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('-t', type=str, default="qa")
+    parser.add_argument('-t', type=str, default="ft")
     parser.add_argument('-i', type=str, default="data.txt")
     parser.add_argument('-o', type=str, default="")
     parser.add_argument('-n', type=int, default=2**23)
