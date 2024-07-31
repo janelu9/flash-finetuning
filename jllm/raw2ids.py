@@ -266,7 +266,7 @@ def write_parquet(filename,output_dir,tokenizer,MAX_SEQ_LENGTH=2048,dtype='ft',b
 
     del data_batch                                
     os.system(f"echo '{i+1} {MAX_SEQ_LENGTH} {batch_size} {len(data.keys())}' > {check_file}")
-    print(f"{filename} stored in parquet with {i+1} samples")
+    print(f"\n{filename} stored in parquet with {i+1} samples")
     gc.collect()
 
 def token_vl(file,tokenizer,MAX_SEQ_LENGTH,ROLE = {},PREFIX = [],ADAPT = []
@@ -388,49 +388,13 @@ def token_vl(file,tokenizer,MAX_SEQ_LENGTH,ROLE = {},PREFIX = [],ADAPT = []
     if sep:
         partition_file = os.path.join(sep , "image.info")
         data = {'pic':[],'rat':[]}
-        
         for k,v in images_database.items():
             data['pic'].append(k)
             data['rat'].append(v[1])
         data['pic'].append(os.path.abspath(image_path))
         data['rat'].append(np.array([tokenizer.img_bos_token_id,tokenizer.img_eos_token_id,img_reader.image_size]))
         pyarrow.parquet.write_table(pyarrow.table(data),partition_file)
-        print(f"Available pictures: {len(data['pic'])-1}")
-    # if output_dir:
-        # partition_dir = os.path.join(output_dir+'_images')
-        # partition_file = os.path.join(partition_dir , f"part-%05d.gzip.parquet")
-        # os.makedirs(partition_dir,exist_ok=True)
-        # element_num = 0
-        # data = {'id':[],'rat':[],'pic':[],'size':[]}
-        # i=-1
-        # p=0
-        # for i,(k,v) in tqdm.tqdm(enumerate(images_database.items())):
-            # data['id'].append(v[0])
-            # data['rat'].append(v[2])
-            # data['pic'].append(v[3])
-            # data['size'].append(v[4])
-            # element_num += v[3].size+5
-            # if element_num>NUM_ELEMENT_LIMIT:
-                # pyarrow.parquet.write_table(pyarrow.table(data),
-                                            # partition_file % (p),
-                                            # compression='gzip')
-                # p+=1
-                # del data
-                # gc.collect()
-                # data = {'id':[],'rat':[],'pic':[],'size':[]}
-                # element_num = 0
-      
-        # data['id'].extend([tokenizer.img_bos_token_id,tokenizer.img_eos_token_id,img_reader.image_size])
-        # data['rat'].extend([np.empty(0,dtype=np.int64)]*3)
-        # data['pic'].extend([np.empty(0,dtype=np.uint8)]*3)
-        # data['size'].extend([np.empty(0,dtype=np.int64)]*3)
-        # pyarrow.parquet.write_table(pyarrow.table(data),
-                                    # partition_file % (p), 
-                                    # compression='gzip')
-
-        # del data                                
-        # print(f"{partition_dir} stored in parquet with {i+1} pictures")
-        # gc.collect()     
+        print(f"\nAvailable pictures: {len(data['pic'])-1}")   
 
 def main(args):
     print(args)
@@ -720,8 +684,6 @@ TOKENIZER = {
     'InternLM2Tokenizer':internvl_template,
     'InternLM2TokenizerFast':internvl_template
 }
-
-
 
 if __name__=='__main__':
     parser = argparse.ArgumentParser()
