@@ -184,7 +184,7 @@ def write_parquet(filename,output_dir,tokenizer,MAX_SEQ_LENGTH=2048,dtype='ft',b
             token = partial(token_finetune, ROLE=ROLE, PREFIX=PREFIX, ADAPT=ADAPT)
         else:
             token = partial(token_vl, ROLE=ROLE, PREFIX=PREFIX, ADAPT=ADAPT, 
-                            img_reader=ImageReader(max_num=max_num),
+                            img_reader=ImageReaderCV2(max_num=max_num),
                             image_path=image_path,
                             sep = output_dir
                             )
@@ -266,7 +266,7 @@ def write_parquet(filename,output_dir,tokenizer,MAX_SEQ_LENGTH=2048,dtype='ft',b
 
     del data_batch                                
     os.system(f"echo '{i+1} {MAX_SEQ_LENGTH} {batch_size} {len(data.keys())}' > {check_file}")
-    print(f"\n{filename} stored in parquet with {i+1} samples")
+    print(f"{filename} stored in parquet with {i+1} samples")
     gc.collect()
 
 def token_vl(file,tokenizer,MAX_SEQ_LENGTH,ROLE = {},PREFIX = [],ADAPT = []
@@ -283,7 +283,7 @@ def token_vl(file,tokenizer,MAX_SEQ_LENGTH,ROLE = {},PREFIX = [],ADAPT = []
                 for img in imgs:
                     try:
                         if img not in images_database:
-                            image = Image.open(os.path.join(image_path,img)).convert('RGB')
+                            image = cv2.imread(os.path.join(image_path,img))
                             target_aspect_ratio,_ = img_reader.find_closest_aspect_ratio(image)
                             num_patches = target_aspect_ratio[0]*target_aspect_ratio[1]
                             num_patches = num_patches + int(num_patches>1)
@@ -578,8 +578,8 @@ IMAGENET_STD = (0.229, 0.224, 0.225)
 def build_transform(input_size):
     MEAN, STD = np.array(IMAGENET_MEAN)[:,None,None], np.array(IMAGENET_STD)[:,None,None]
     transform = T.Compose([
-        T.Lambda(lambda img: img.convert('RGB') if img.mode != 'RGB' else img),
-        T.Resize((input_size, input_size), interpolation=InterpolationMode.BICUBIC),
+        #T.Lambda(lambda img: img.convert('RGB') if img.mode != 'RGB' else img),
+        #T.Resize((input_size, input_size), interpolation=InterpolationMode.BICUBIC),
         T.Lambda(lambda img:np.array(img).transpose(2,0,1)),
         #T.Lambda(lambda x:(x/255-MEAN)/STD)
     ])
@@ -641,6 +641,64 @@ class ImageReader:
         images = self.dynamic_preprocess(image, use_thumbnail=True)
         pixel_values = [self.transform(image) for image in images]
         pixel_values = np.stack(pixel_values)
+        return pixel_values
+
+import cv2
+
+class ImageReaderCV2:
+    
+    def __init__(self,min_num=1, max_num=6,input_size = 448):
+        
+        target_ratios = set(
+            (i, j) for n in range(min_num, max_num + 1) for i in range(1, n + 1) for j in range(1, n + 1) if
+            i * j <= max_num and i * j >= min_num)
+        target_ratios = np.array(sorted(target_ratios, key=lambda x: x[0] * x[1]))
+        rdict={}
+        for i,(w,h) in enumerate(target_ratios):
+            r = w/h
+            if r in rdict:
+                rdict[r].append(i)
+            else:
+                rdict[r]=[i]
+        target_ratios_rat = np.array(list(rdict.keys()))
+
+        self.rdict = {k:np.array(v) for k,v in rdict.items()}
+        self.target_ratios = target_ratios
+        self.target_ratios_rat = target_ratios_rat
+        self.target_sizes = target_ratios*input_size
+        self.target_half_areas = self.target_sizes[:,0]*self.target_sizes[:,1]*0.5
+        self.image_size = input_size
+
+    def find_closest_aspect_ratio(self,image):
+        orig_height, orig_width = image.shape[:2]
+        aspect_ratio = orig_width / orig_height
+        min_index = np.argmin(np.abs(self.target_ratios_rat-aspect_ratio))
+        min = self.target_ratios_rat[min_index]
+        mins = self.rdict[min]
+        if len(mins)==1:
+            return self.target_ratios[mins[0]],self.target_sizes[mins[0]]
+        idx = mins[self.target_half_areas[mins]<orig_width*orig_height]
+        if len(idx)>0:
+            return self.target_ratios[idx[-1]],self.target_sizes[idx[-1]]
+        return self.target_ratios[mins[0]],self.target_sizes[mins[0]]
+    
+    def dynamic_preprocess(self,image, use_thumbnail=False):
+        # find the closest aspect ratio to the target
+        target_aspect_ratio,(target_width,target_height) = self.find_closest_aspect_ratio(image)
+        # resize the image
+        resized_img = cv2.resize(image, (target_width,target_height), interpolation=cv2.INTER_AREA)
+        processed_images = [resized_img[j*self.image_size:(j+1)*self.image_size,i*self.image_size:(i+1)*self.image_size,:]
+                            for i in range(target_aspect_ratio[0]) for j in range(target_aspect_ratio[1])]
+        #assert len(processed_images) == blocks
+        if use_thumbnail and len(processed_images) != 1:
+            thumbnail_img = cv2.resize(image,(self.image_size, self.image_size), interpolation=cv2.INTER_AREA)
+            processed_images.append(thumbnail_img)
+        return processed_images
+
+    def __call__(self,image_file):
+        image = cv2.cvtColor(cv2.imread(image_file), cv2.COLOR_BGR2RGB)
+        images = self.dynamic_preprocess(image, use_thumbnail=True)
+        pixel_values = np.stack(images).transpose(0,3,1,2)
         return pixel_values
 
 def internvl_template(tokenizer): 
