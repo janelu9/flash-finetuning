@@ -3,6 +3,7 @@ sentencepiece
 transformers
 deepspeed
 accelerate
+opencv-python
 #flash-attn # Install the wheel package downloaded from https://github.com/Dao-AILab/flash-attention/releases
 pyarrow
 tiktoken

@@ -186,7 +186,7 @@ def write_parquet(filename,output_dir,tokenizer,MAX_SEQ_LENGTH=2048,dtype='ft',b
             token = partial(token_vl, ROLE=ROLE, PREFIX=PREFIX, ADAPT=ADAPT, 
                             img_reader=ImageReaderCV2(max_num=max_num),
                             image_path=image_path,
-                            sep = output_dir
+                            sep = output_dir if sep else None
                             )
             auto_batch_size = True if not sep else False
     else:
@@ -274,7 +274,7 @@ def token_vl(file,tokenizer,MAX_SEQ_LENGTH,ROLE = {},PREFIX = [],ADAPT = []
 
     from jllm.data.utils import qa_inputs_generator,img_token_alignment
     
-    if sep is not None:
+    if sep:
         images_database = {}
         def replace_image_token(v):
             if not isinstance(v,str):
