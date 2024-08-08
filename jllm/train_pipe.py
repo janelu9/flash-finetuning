@@ -251,8 +251,6 @@ args.device = deepspeed.get_accelerator().device_name()
 if args.device == 'npu':
     import torch_npu
     from torch_npu.contrib import transfer_to_npu
-    args.optimize_recomp_communication_status = 0
-    args.optimize_recomp_communication_level = 2  
     def get_args():
         return args
 

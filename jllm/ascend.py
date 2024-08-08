@@ -306,7 +306,11 @@ def exe_adaptation():
 
     # accelerate package will check TE on sys.modules，so we need remove this patch
     del sys.modules['transformer_engine']
-
+    
+    from jllm.train_pipe import get_args
+    args=get_args()
+    args.optimize_recomp_communication_status = 0
+    args.optimize_recomp_communication_level = 2
 
 exe_adaptation()
 
