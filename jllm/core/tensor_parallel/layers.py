@@ -1291,7 +1291,7 @@ class RowParallelLinear(torch.nn.Module):
         else:
             output = output_
             output_bias = self.bias
-        return output#, output_bias
+        return output, output_bias
 
     def sharded_state_dict(self, prefix='', sharded_offsets=(), metadata=None):
         """ Sharding along axis 1, bias not sharded """
