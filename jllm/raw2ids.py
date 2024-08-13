@@ -120,7 +120,7 @@ def finetune_generator(file):
             yield line
             line = f.readline()
 
-def token_finetune(file,tokenizer,MAX_SEQ_LENGTH,ROLE = {},PREFIX = [],ADAPT = []):
+def token_finetune(file,tokenizer,MAX_SEQ_LENGTH,ROLE = {},PREFIX = [],ADAPT = [],padding=False):
     from jllm.data.utils import qa_inputs_generator
     for sample in finetune_generator(file):
         js = json.loads(sample.strip())
@@ -168,12 +168,24 @@ def token_finetune(file,tokenizer,MAX_SEQ_LENGTH,ROLE = {},PREFIX = [],ADAPT = [
                                                        MAX_SEQ_LENGTH,
                                                        MAX_HISTORY_LENGTH = MAX_SEQ_LENGTH//2,
                                                        pad_token_id = tokenizer.pad_token_id,
-                                                       IGNORE_TOKEN_ID = -100):
+                                                       IGNORE_TOKEN_ID = -100,
+                                                       padding = padding):
                     if 'category' in js:
                         qa_inputs.update({"prompt_len":divide[1],"classes":int(js['category'])})
                     yield qa_inputs
    
-def write_parquet(filename,output_dir,tokenizer,MAX_SEQ_LENGTH=2048,dtype='ft',batch_size=2**15,compression='gzip',stack=False,max_num=1,image_path='',sep=False):
+def write_parquet(filename,
+                  output_dir,
+                  tokenizer,
+                  MAX_SEQ_LENGTH=2048,
+                  dtype='ft',
+                  batch_size=2**15,
+                  compression='gzip',
+                  stack=False,
+                  max_num=1,
+                  image_path='',
+                  sep=False,
+                  padding=False):
     
     tokenizer = AutoTokenizer.from_pretrained(tokenizer,use_fast=True,trust_remote_code=True,add_bos_token = False)
     tokenizer_class = tokenizer.__class__.__name__ 
@@ -181,13 +193,13 @@ def write_parquet(filename,output_dir,tokenizer,MAX_SEQ_LENGTH=2048,dtype='ft',b
     auto_batch_size = False
     if dtype == 'ft':
         if not hasattr(tokenizer,'get_image_tokens'):
-            token = partial(token_finetune, ROLE=ROLE, PREFIX=PREFIX, ADAPT=ADAPT)
+            token = partial(token_finetune, ROLE=ROLE, PREFIX=PREFIX, ADAPT=ADAPT,padding=padding)
         else:
             token = partial(token_vl, ROLE=ROLE, PREFIX=PREFIX, ADAPT=ADAPT, 
                             img_reader=ImageReaderCV2(max_num=max_num),
                             image_path=image_path,
-                            sep = output_dir if sep else None
-                            )
+                            sep = output_dir if sep else None,
+                            padding=padding)
             auto_batch_size = True if not sep else False
     else:
         token = partial(token_pretrain,stack = stack)
@@ -270,7 +282,7 @@ def write_parquet(filename,output_dir,tokenizer,MAX_SEQ_LENGTH=2048,dtype='ft',b
     gc.collect()
 
 def token_vl(file,tokenizer,MAX_SEQ_LENGTH,ROLE = {},PREFIX = [],ADAPT = []
-             ,img_reader=None,image_path='',sep = None):
+             ,img_reader=None,image_path='',sep = None,padding = False):
 
     from jllm.data.utils import qa_inputs_generator,img_token_alignment
     
@@ -365,7 +377,8 @@ def token_vl(file,tokenizer,MAX_SEQ_LENGTH,ROLE = {},PREFIX = [],ADAPT = []
                                                                 MAX_SEQ_LENGTH,
                                                                 MAX_HISTORY_LENGTH = MAX_SEQ_LENGTH//2,
                                                                 pad_token_id = tokenizer.pad_token_id,
-                                                                IGNORE_TOKEN_ID = -100):
+                                                                IGNORE_TOKEN_ID = -100,
+                                                                padding=padding):
                     s = sub_divide[0]
                     e = sub_divide[-2] if len(sub_divide)%2 else sub_divide[-1]
                     matched = None
@@ -432,7 +445,8 @@ def main(args):
                        stack=args.stack,
                        max_num=args.max_num,
                        image_path=args.image_path,
-                       sep=args.sep)
+                       sep=args.sep,
+                       padding=args.pad)
         files =[os.path.join(tmp, i) for i in os.listdir(tmp)]
         files.sort()
         np.random.shuffle(files)
@@ -761,5 +775,6 @@ if __name__=='__main__':
     parser.add_argument('-T', action='store_true', help="thread")
     parser.add_argument('-C', action='store_true', help="clean")
     parser.add_argument('--sep', action='store_true', help="separate text and images.")
+    parser.add_argument('--pad', action='store_true', help="pad the token.")
     args = parser.parse_args()
     main(args)
