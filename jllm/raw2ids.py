@@ -438,7 +438,7 @@ def main(args):
         func = partial(write_parquet,
                        output_dir=output_dir,
                        tokenizer=args.tokenizer,
-                       MAX_SEQ_LENGTH= args.seq_len,
+                       MAX_SEQ_LENGTH= args.max_len,
                        dtype=args.t,
                        batch_size=args.batch_size,
                        compression=args.c.lower(),
@@ -765,7 +765,7 @@ if __name__=='__main__':
     parser.add_argument('-n', type=int, default=2**23)
     parser.add_argument('-c', type=str, default="gzip",choices=('gzip','brotli','snappy','lz4','zstd'))
     parser.add_argument('--batch_size', type=int, default=2**16)
-    parser.add_argument('--seq_len', type=int, default=2**11)
+    parser.add_argument('--max_len', type=int, default=2**11)
     parser.add_argument('--cores', type=int, default=-1)
     parser.add_argument('--max_num', type=int, default=1)
     parser.add_argument('--tokenizer', type=str, default="openlm-research/open_llama_13b")

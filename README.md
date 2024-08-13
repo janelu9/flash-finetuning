@@ -34,6 +34,7 @@ python -m jllm.raw2ids \
     --tokenizer InternVL2-8B \
     -i dataset_vl.jsonl \
     --image_path images \
+    --max_len 8192 \
     --sep
 ```
 
@@ -142,7 +143,7 @@ deepspeed -H $HOSTFILE \
     --train_data shuffled_datasets \
     --pipe_parallel_size 8 \
     --model_parallel_size 1 \
-    --per_device_train_batch_size 2 \
+    --per_device_train_batch_size 1 \
     --gradient_accumulation_steps 32 \
     --ds_config ds_config.py \
     --checkpoint checkpoint \
