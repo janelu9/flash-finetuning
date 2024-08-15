@@ -1095,7 +1095,7 @@ class ColumnParallelLinear(torch.nn.Module):
         else:
             output = output_parallel
         output_bias = self.bias if self.skip_bias_add else None
-        return output#, output_bias
+        return output, output_bias
 
     def sharded_state_dict(self, prefix='', sharded_offsets=(), metadata=None):
         """ Sharding along axis 0, bias sharded """

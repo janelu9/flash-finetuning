@@ -232,6 +232,10 @@ parser.add_argument("--lora_dim",
                     type=int,
                     default=0,
                     help="If > 0, use LoRA for efficient training.")
+parser.add_argument("--lora_alpha",
+                    type=int,
+                    default=1,
+                    help="lora_alpha/lora_dim is the scaling.")
 parser.add_argument("--lora_module_name",
                     type=str,
                     default= "self_attn,mlp",
@@ -333,7 +337,7 @@ def main(args):
             partition_method = str(list(range(args.encoder_pipe_parallel_size+len(config.partition_method))))[1:-1]
     else:
         partition_method = str(config.partition_method)[1:-1]
- 
+
     torch.distributed.barrier()
     
     topo = ProcessTopology(['data','pipe','model'], [args.data_parallel_size, args.pipe_parallel_size, args.model_parallel_size])
@@ -380,14 +384,27 @@ def main(args):
             return
     
     if args.lora_dim > 0:
-        model = convert_linear_layer_to_lora(
-            model,
-            args.lora_module_name.split(","),
-            args.lora_dim)
-        if args.only_optimize_lora:
-            model = only_optimize_lora_parameters(model)
-            model = make_model_gradient_checkpointing_compatible(model)
-            
+        if args.model_parallel_size > 1:
+            from peft import LoraConfig, get_peft_model
+            lora_config = LoraConfig(
+                r=args.lora_dim,
+                lora_alpha=args.lora_alpha,
+                target_modules=args.lora_module_name.split(','),
+                lora_dropout=0.0,
+                bias="none",
+                megatron_config=parallel_config,
+                megatron_core="jllm.core")
+            get_peft_model(model, lora_config)
+        else:
+            model = convert_linear_layer_to_lora(
+                model,
+                args.lora_module_name.split(','),
+                args.lora_dim,
+                args.lora_alpha)
+            if args.only_optimize_lora:
+                model = only_optimize_lora_parameters(model)
+                model = make_model_gradient_checkpointing_compatible(model)
+        
     if "optimizer" not in ds_config:
         optimizer_grouped_parameters = get_optimizer_grouped_parameters(
             model, args.weight_decay)
