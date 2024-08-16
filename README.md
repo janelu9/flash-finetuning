@@ -1,6 +1,6 @@
-# EasyLLM
+# *Flash Fine Tuning*
 
-Running Large Language Model easily, faster and low-cost. 
+Training Large Language Model faster, easily and low-cost. 
 
 Make PCIE as fast as NVlinks.
 
@@ -234,16 +234,16 @@ curl http://localhost:8000/generate \
 
 ## Citation
 
-If you find EasyLLM useful or use EasyLLM  code  in your research, please cite it in your publications.
+If you find flash-finetuning useful or use flash-finetuning  code  in your research, please cite it in your publications.
 
 ```bibtex
-@misc{EasyLLM,
+@misc{flash-finetuning,
   author       = {Jian Lu},
-  title        = {EasyLLM: Running Large Language Model easily, faster and low-cost.},
+  title        = {Flash Fine Tuning: Training Large Language Model faster, easily and low-cost.},
   year         = {2023},
   publisher    = {GitHub},
   journal      = {GitHub repository},
-  howpublished = {\url{https://github.com/janelu9/EasyLLM.git}},
+  howpublished = {\url{https://github.com/janelu9/flash-finetuning.git}},
 }
 ```
 
