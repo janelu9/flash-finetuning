@@ -309,6 +309,7 @@ def main(args):
     config.device = args.device
     config.encoder_pipe_parallel_size = args.encoder_pipe_parallel_size
     config.seq_len = args.seq_len
+    config.lora_alpha = args.lora_alpha
     args.image_size = getattr(config,'force_image_size',None)
 
     if args.num_layers_per_decoder:
@@ -385,16 +386,15 @@ def main(args):
     
     if args.lora_dim > 0:
         if args.model_parallel_size > 1:
-            from peft import LoraConfig, get_peft_model
+            from peft import LoraConfig, inject_adapter_in_model
             lora_config = LoraConfig(
                 r=args.lora_dim,
                 lora_alpha=args.lora_alpha,
                 target_modules=args.lora_module_name.split(','),
-                lora_dropout=0.0,
-                bias="none",
                 megatron_config=parallel_config,
-                megatron_core="jllm.core")
-            get_peft_model(model, lora_config)
+                megatron_core="jllm.core",
+                )
+            model = inject_adapter_in_model(lora_config,model)
         else:
             model = convert_linear_layer_to_lora(
                 model,
