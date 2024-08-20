@@ -188,6 +188,7 @@ def write_parquet(filename,
                   padding=False):
     
     tokenizer = AutoTokenizer.from_pretrained(tokenizer,use_fast=True,trust_remote_code=True,add_bos_token = False)
+    tokenizer.encode = partial(tokenizer.encode,add_special_tokens=False)
     tokenizer_class = tokenizer.__class__.__name__ 
     tokenizer,ROLE,PREFIX,ADAPT = TOKENIZER[tokenizer_class](tokenizer)
     auto_batch_size = False
