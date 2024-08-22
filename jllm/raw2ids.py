@@ -509,8 +509,8 @@ def llama3_template(tokenizer):
     PREFIX,ADAPT=[],[]
     tokenizer.bos_token_id = tokenizer.encode('<|begin_of_text|>')[0]
     tokenizer.im_end_id = tokenizer.encode('<|eot_id|>')[0]
-    tokenizer.pad_token_id = tokenizer.encode('<|end_of_text|>')[0]
-    tokenizer.eos_token_id = tokenizer.im_end_id
+    tokenizer.pad_token_id = tokenizer.encode('<|finetune_right_pad_id|>')[0]
+    tokenizer.eos_token_id = tokenizer.encode('<|end_of_text|>')[0]
 
     start_header_id = tokenizer.encode('<|start_header_id|>')
     end_header_id = tokenizer.encode('<|end_header_id|>')
@@ -552,8 +552,8 @@ def qwen2_template(tokenizer):
     
     PREFIX,ADAPT=[],[]
     tokenizer.bos_token_id = tokenizer.im_start_id = tokenizer.encode("<|im_start|>")[0]
-    tokenizer.eos_token_id = tokenizer.im_end_id = tokenizer.encode("<|im_end|>")[0]
-    tokenizer.pad_token_id = tokenizer.encode("<|endoftext|>")[0]
+    tokenizer.im_end_id = tokenizer.encode("<|im_end|>")[0]
+    tokenizer.pad_token_id = tokenizer.eos_token_id = tokenizer.encode("<|endoftext|>")[0]
     nl_token_id = tokenizer.encode("\n")
     system_id = tokenizer.encode("system")
     user_id = tokenizer.encode("user")
