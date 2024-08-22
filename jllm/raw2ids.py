@@ -81,7 +81,7 @@ def token_pretrain(file,tokenizer,MAX_SEQ_LENGTH,stack=True):
                 ids = []   
             elif l>=MAX_SEQ_LENGTH-3: # pad few then yield  
                 input_ids.extend([tokenizer.pad_token_id]*(MAX_SEQ_LENGTH-l))
-                cu_seqlens.append(MAX_SEQ_LENGTH-1)
+                cu_seqlens.append(l)
                 yield {'input_ids':input_ids,'cu_seqlens':cu_seqlens}
                 cu_seqlens = [0]
                 ids = []
@@ -89,7 +89,7 @@ def token_pretrain(file,tokenizer,MAX_SEQ_LENGTH,stack=True):
                 ids=input_ids
  
         if 1<l<MAX_SEQ_LENGTH:
-            cu_seqlens.append(MAX_SEQ_LENGTH-1)
+            cu_seqlens.append(l)
             input_ids.extend([tokenizer.pad_token_id]*(MAX_SEQ_LENGTH-l))
             yield {'input_ids':input_ids,'cu_seqlens':cu_seqlens}
     else:
