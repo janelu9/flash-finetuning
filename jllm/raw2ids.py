@@ -73,7 +73,7 @@ def token_pretrain(file,tokenizer,MAX_SEQ_LENGTH,stack=True):
                 l = len(input_ids)
                 if l==MAX_SEQ_LENGTH:
                     cu_seqlens.append(MAX_SEQ_LENGTH-1)
-                    yield {'input_ids':np.array(input_ids, dtype=np.int32),'cu_seqlens':np.array(cu_seqlens, dtype=np.int32)}
+                    yield {'input_ids':input_ids,'cu_seqlens':cu_seqlens}
                     cu_seqlens = [0]
                 p += MAX_SEQ_LENGTH-OVERLAPPING_LENGTH
                 
@@ -82,7 +82,7 @@ def token_pretrain(file,tokenizer,MAX_SEQ_LENGTH,stack=True):
             elif l>=MAX_SEQ_LENGTH-3: # pad few then yield  
                 input_ids.extend([tokenizer.pad_token_id]*(MAX_SEQ_LENGTH-l))
                 cu_seqlens.append(MAX_SEQ_LENGTH-1)
-                yield {'input_ids':np.array(input_ids, dtype=np.int32),'cu_seqlens':np.array(cu_seqlens, dtype=np.int32)}
+                yield {'input_ids':input_ids,'cu_seqlens':cu_seqlens}
                 cu_seqlens = [0]
                 ids = []
             else: # join to next doc
@@ -91,7 +91,7 @@ def token_pretrain(file,tokenizer,MAX_SEQ_LENGTH,stack=True):
         if 1<l<MAX_SEQ_LENGTH:
             cu_seqlens.append(MAX_SEQ_LENGTH-1)
             input_ids.extend([tokenizer.pad_token_id]*(MAX_SEQ_LENGTH-l))
-            yield {'input_ids':np.array(input_ids, dtype=np.int32),'cu_seqlens':np.array(cu_seqlens, dtype=np.int32)}
+            yield {'input_ids':input_ids,'cu_seqlens':cu_seqlens}
     else:
         for bos,doc,eos in pretrain_generator(file):
             ids = []
@@ -106,12 +106,12 @@ def token_pretrain(file,tokenizer,MAX_SEQ_LENGTH,stack=True):
                 input_ids=ids[p:p+MAX_SEQ_LENGTH]
                 l = len(input_ids)
                 if l==MAX_SEQ_LENGTH:
-                    yield {'input_ids':np.array(input_ids, dtype=np.int32)}
+                    yield {'input_ids':input_ids}
                 p += MAX_SEQ_LENGTH-OVERLAPPING_LENGTH
                 
             if 1<l<MAX_SEQ_LENGTH:
                 input_ids.extend([tokenizer.pad_token_id]*(MAX_SEQ_LENGTH-l))
-                yield {'input_ids':np.array(input_ids, dtype=np.int32)}
+                yield {'input_ids':input_ids}
         
 def finetune_generator(file):
     with open(file,"r") as f:
