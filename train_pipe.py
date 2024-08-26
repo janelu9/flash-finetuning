@@ -203,10 +203,6 @@ parser.add_argument('--checkpoint_interval',
                     type=int,
                     default=0,
                     help='The granularity activation checkpointing in terms of number of layers. 0 disables activation checkpointing.')
-parser.add_argument('--checkpoint_grad_step',
-                    type=int,
-                    default=1,
-                    help='checkpoint grad every step')
 parser.add_argument('--low_mem',
                     action='store_true',
                     help='lower memory usage.')
@@ -308,7 +304,6 @@ def main(args):
         config = AutoConfig.from_pretrained(args.model)
     config.block_mask=args.block_mask
     config.checkpoint_interval = args.checkpoint_interval
-    config.checkpoint_grad_step = args.checkpoint_grad_step
     config.num_partitions = args.emb_partitions
     config.split_dlayer = args.split_dlayer
     config.device = args.device
