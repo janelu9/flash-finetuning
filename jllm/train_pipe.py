@@ -290,7 +290,7 @@ def main(args):
             write_parquet(args.train_data,cached_dir,args.model,MAX_SEQ_LENGTH=args.seq_len)
         torch.distributed.barrier()
         args.train_data = cached_dir
-    train_data_partitions = [os.path.join(args.train_data,f) for f in os.listdir(args.train_data) if os.path.isdir(os.path.join(args.train_data,f))]
+    train_data_partitions = sorted([os.path.join(args.train_data,f) for f in os.listdir(args.train_data) if os.path.isdir(os.path.join(args.train_data,f))])
     args.seq_len = int(open(os.path.join(args.train_data,[f for f in os.listdir(args.train_data) if f[-4:] == '.crc'][0])).read().split()[1])
     if args.eval_data:
         if os.path.isfile(args.eval_data):
@@ -300,7 +300,7 @@ def main(args):
                 write_parquet(args.eval_data,cached_dir,args.model,MAX_SEQ_LENGTH=args.seq_len)
             torch.distributed.barrier()
             args.eval_data = cached_dir
-        eval_data_partitions = [os.path.join(args.eval_data,f) for f in os.listdir(args.eval_data) if os.path.isdir(os.path.join(args.eval_data,f))]   
+        eval_data_partitions = sorted([os.path.join(args.eval_data,f) for f in os.listdir(args.eval_data) if os.path.isdir(os.path.join(args.eval_data,f))])
     
     try:
         config = AutoConfig.from_pretrained(args.model,trust_remote_code=True)
@@ -349,7 +349,7 @@ def main(args):
     topo = ProcessTopology(['data','pipe','model'], [args.data_parallel_size, args.pipe_parallel_size, args.model_parallel_size])
     args.seed = args.seed + topo.get_coord(args.global_rank).pipe
     
-    if args.model_parallel_size > 1:
+    if args.model_parallel_size >1:
         if args.device == 'npu':
             import jllm.ascend
         from jllm.core import parallel_state,tensor_parallel
