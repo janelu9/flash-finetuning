@@ -117,7 +117,7 @@ shuffled_datasets/
 └── data.info
 ```
 
-***Note**: You can also use Spark to shuffle the data if you have and want.*
+*Note: You can also use **PySpark** to do these. jllm could directly read token ids from the parquets **Spark** write out.* 
 
 ## Model Training
 
