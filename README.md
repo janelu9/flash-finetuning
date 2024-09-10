@@ -2,7 +2,13 @@
 
 Training Large Language Model faster, easily and low-cost. 
 
-Make PCIE as fast as NVlinks.
+✦ Both GPU and NPU are supported.
+
+✦ Directly training on whole big data write by Spark when pretrain.
+
+✦ Flash speed when fine-tuning because of  no redundant computation .
+
+✦ Make PCIE as fast as NVlinks under ten billion level model.
 
 ## Installation
 
@@ -117,24 +123,9 @@ shuffled_datasets/
 └── data.info
 ```
 
-*Note: You can also use **PySpark** to do these. jllm could directly read token ids from the parquets **Spark** write out.* 
+*Note: You can also use **PySpark** to do these steps. jllm could directly read token ids from the parquets those write out by **Spark** .* 
 
 ## Model Training
-
-Here are two training examples.
-
-### ZERO
-
-```shell
-deepspeed -H $HOSTFILE \
-    --train_zero.py \
-    --model Qwen1.5-14B-Chat \
-    --train_data dataset0.jsonl
-```
-
-Both GPU and NPU are supported.
-
-### 3D Parallelism
 
 ```shell
 deepspeed -H $HOSTFILE \
@@ -150,7 +141,7 @@ deepspeed -H $HOSTFILE \
     --max_num_checkpoints 2 \
     --partition_method fast \
     --split_dlayer \
-    --checkpoint_interval 2 
+    --checkpoint_interval 1
 ```
 
 ***Note**: Arguments `train_data` and `eval_data` also support `jsonl` file. Run `python -m jllm.train_pipe -h ` for more arguments.* 
@@ -159,7 +150,7 @@ Generally, every GPU process reads one piece of data, that means one node with 8
 
 The engine was designed to save checkpoint through background process by default to save more time for training. **Don't save checkpoint too frequently** unless you disable checkpoint in background via the argument '`--background_executor none`' to avoid out of CPU memory.
 
-Setting `partition_method` to be`fast` will always get a faster training when memory are enough.
+Setting `partition_method` to be `fast` will always get a faster training when GPU memory are enough.
 
 #### Checkpoint Conversion
 
@@ -189,7 +180,7 @@ python -m jllm.nolora_ckpt2hf \
 |  llama-13b   |       92749.82(old)       |
 | baichuan-13b |       79765.50(old)       |
 |   qwen-14b   |       80749.57(old)       |
-|   qwen-moe   |             -             |
+|  qwen2-moe   |             -             |
 |  internlm2   |             -             |
 |  internvl2   |             -             |
 
