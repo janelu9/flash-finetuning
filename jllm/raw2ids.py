@@ -88,7 +88,7 @@ def token_pretrain(file,tokenizer,MAX_SEQ_LENGTH,stack=True):
             else: # join to next doc
                 ids=input_ids
  
-        if 1<l<MAX_SEQ_LENGTH:
+        if 2<l<MAX_SEQ_LENGTH:
             cu_seqlens.append(l)
             input_ids.extend([tokenizer.pad_token_id]*(MAX_SEQ_LENGTH-l))
             yield {'input_ids':np.array(input_ids,dtype=np.int32),'cu_seqlens':np.array(cu_seqlens,dtype=np.int32)}
