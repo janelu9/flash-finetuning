@@ -148,9 +148,13 @@ parser.add_argument('--seq_len',
 parser.add_argument('--block_mask',
                     action='store_true',
                     help="use BlockDiagonalCausalMask")
+parser.add_argument('--skip_train_step',
+                    type=str,
+                    default="",
+                    help='Do not train on these steps')
 parser.add_argument('--steps_per_print',
                     type=int,
-                    default=10,
+                    default=1,
                     help='steps per print')
 parser.add_argument('--steps_per_eval',
                     type=int,
@@ -199,14 +203,14 @@ parser.add_argument('--early_stop',
                     type=int,
                     default=-1,
                     help='if eval loss continuous rebound epoches == early_stop, training will be breaked')              
-parser.add_argument('--checkpoint_interval',
+parser.add_argument('--checkpoint_grad_interval',
                     type=int,
                     default=0,
                     help='The granularity activation checkpointing in terms of number of layers. 0 disables activation checkpointing.')
-parser.add_argument('--checkpoint_grad_step',
+parser.add_argument('--no_checkpoint_grad_step',
                     type=int,
-                    default=1,
-                    help='checkpoint grad every step')
+                    default=1000000,
+                    help='no checkpoint grad step')
 parser.add_argument('--low_mem',
                     action='store_true',
                     help='lower memory usage.')
@@ -307,8 +311,8 @@ def main(args):
     except:
         config = AutoConfig.from_pretrained(args.model)
     config.block_mask=args.block_mask
-    config.checkpoint_interval = args.checkpoint_interval
-    config.checkpoint_grad_step = args.checkpoint_grad_step
+    config.checkpoint_interval = args.checkpoint_grad_interval
+    config.checkpoint_grad_step = args.no_checkpoint_grad_step
     config.num_partitions = args.emb_partitions
     config.split_dlayer = args.split_dlayer
     config.device = args.device

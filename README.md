@@ -141,7 +141,7 @@ deepspeed -H $HOSTFILE \
     --max_num_checkpoints 2 \
     --partition_method fast \
     --split_dlayer \
-    --checkpoint_interval 1
+    --checkpoint_grad_interval 1
 ```
 
 ***Note**: Arguments `train_data` and `eval_data` also support `jsonl` file. Run `python -m jllm.train_pipe -h ` for more arguments.* 
