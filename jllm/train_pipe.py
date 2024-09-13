@@ -148,7 +148,7 @@ parser.add_argument('--seq_len',
 parser.add_argument('--block_mask',
                     action='store_true',
                     help="use BlockDiagonalCausalMask")
-parser.add_argument('--skip_train_step',
+parser.add_argument('--skip_train_steps',
                     type=str,
                     default="",
                     help='Do not train on these steps')
@@ -318,6 +318,7 @@ def main(args):
     config.device = args.device
     config.encoder_pipe_parallel_size = args.encoder_pipe_parallel_size
     config.seq_len = args.seq_len
+    config.lora = args.lora_dim>0
     config.lora_alpha = args.lora_alpha
     args.image_size = getattr(config,'force_image_size',None)
 
@@ -413,7 +414,7 @@ def main(args):
             if args.only_optimize_lora:
                 model = only_optimize_lora_parameters(model)
                 model = make_model_gradient_checkpointing_compatible(model)
-        
+                
     if "optimizer" not in ds_config:
         optimizer_grouped_parameters = get_optimizer_grouped_parameters(
             model, args.weight_decay)

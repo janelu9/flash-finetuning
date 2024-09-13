@@ -134,10 +134,10 @@ def convert_lora_to_linear_layer(model):
     return model
 
 
-def only_optimize_lora_parameters(model, force_optimize_params=[]):
+def only_optimize_lora_parameters(model, force_optimize_params='gradientor'):
     # turn off the gradient of all the parameters except the LoRA parameters
     for name, param in model.named_parameters():
-        if "lora_right_weight" in name or "lora_left_weight" in name or name in force_optimize_params:
+        if "lora_right_weight" in name or "lora_left_weight" in name or force_optimize_params in name:
             param.requires_grad = True
         else:
             param.requires_grad = False
