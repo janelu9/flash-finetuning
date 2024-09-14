@@ -190,7 +190,7 @@ def write_parquet(filename,
     tokenizer = AutoTokenizer.from_pretrained(tokenizer,use_fast=True,trust_remote_code=True,add_bos_token = False)
     tokenizer.encode = partial(tokenizer.encode,add_special_tokens=False)
     tokenizer_class = tokenizer.__class__.__name__ 
-    tokenizer,ROLE,PREFIX,ADAPT = TOKENIZER[tokenizer_class](tokenizer)
+    tokenizer,ROLE,PREFIX,ADAPT = TOKENIZER[tokenizer_class](tokenizer, max_num=max_num)
     auto_batch_size = False
     if dtype == 'ft':
         if not hasattr(tokenizer,'get_image_tokens'):
@@ -297,12 +297,8 @@ def token_vl(file,tokenizer,MAX_SEQ_LENGTH,ROLE = {},PREFIX = [],ADAPT = []
                     try:
                         if img not in images_database:
                             image = cv2.imread(os.path.join(image_path,img))
-                            target_aspect_ratio,_ = img_reader.find_closest_aspect_ratio(image)
-                            num_patches = target_aspect_ratio[0]*target_aspect_ratio[1]
-                            num_patches = num_patches + int(num_patches>1)
-                            # key =len(images_database)
-                            image_tokens = tokenizer.get_image_tokens(num_patches)
-                            images_database[img] = (image_tokens,target_aspect_ratio)
+                            image_tokens,resize_info = tokenizer.get_image_tokens(image)
+                            images_database[img] = (image_tokens,resize_info)
                         else:
                             image_tokens,_ = images_database[img]
                         v=v.replace('<image>', image_tokens,1)
@@ -406,7 +402,7 @@ def token_vl(file,tokenizer,MAX_SEQ_LENGTH,ROLE = {},PREFIX = [],ADAPT = []
             data['pic'].append(k)
             data['rat'].append(v[1])
         data['pic'].append(os.path.abspath(image_path))
-        data['rat'].append(np.array([tokenizer.img_bos_token_id,tokenizer.img_eos_token_id,img_reader.image_size]))
+        data['rat'].append(np.array([tokenizer.img_bos_token_id,tokenizer.img_eos_token_id,tokenizer.image_size]))
         pyarrow.parquet.write_table(pyarrow.table(data),partition_file)
         print(f"\nAvailable pictures: {len(data['pic'])-1}")   
 
@@ -485,7 +481,7 @@ def main(args):
     '''
 
     
-def llama_template(tokenizer):
+def llama_template(tokenizer,**kwargs):
     
     PREFIX,ADAPT=[],[]
     tokenizer.pad_token_id = 0
@@ -504,7 +500,7 @@ def llama_template(tokenizer):
     
     return tokenizer,ROLE,PREFIX,ADAPT
     
-def llama3_template(tokenizer):
+def llama3_template(tokenizer,**kwargs):
     
     PREFIX,ADAPT=[],[]
     tokenizer.bos_token_id = tokenizer.encode('<|begin_of_text|>')[0]
@@ -528,7 +524,7 @@ def llama3_template(tokenizer):
     ADAPT = [tokenizer.bos_token_id,start_header_id[0]]
     return tokenizer,ROLE,PREFIX,ADAPT
     
-def qwen_template(tokenizer): 
+def qwen_template(tokenizer,**kwargs): 
     
     PREFIX,ADAPT=[],[]
     tokenizer.bos_token_id = tokenizer.im_start_id
@@ -548,7 +544,7 @@ def qwen_template(tokenizer):
     
     return tokenizer,ROLE,PREFIX,ADAPT 
     
-def qwen2_template(tokenizer): 
+def qwen2_template(tokenizer,**kwargs): 
     
     PREFIX,ADAPT=[],[]
     tokenizer.bos_token_id = tokenizer.im_start_id = tokenizer.encode("<|im_start|>")[0]
@@ -566,9 +562,44 @@ def qwen2_template(tokenizer):
     }
     PREFIX = [{"system":"You are a helpful assistant."}]
     
+    config = AutoConfig.from_pretrained(tokenizer.name_or_path)
+    if hasattr(config,'vision_config'):
+        from transformers import AutoProcessor
+        from transformers.models.qwen2_vl.image_processing_qwen2_vl import smart_resize
+        
+        processor = AutoProcessor.from_pretrained(tokenizer.name_or_path)
+        
+        def get_image_tokens(images,pad_token='<|image_pad|>'):
+            if not isinstance(images,(list,tuple)):
+                images=[images]
+            height,width,_=images[0].shape
+            resized_height, resized_width = smart_resize(
+                    height,
+                    width,
+                    factor=processor.image_processor.patch_size * processor.image_processor.merge_size,
+                    min_pixels=processor.image_processor.min_pixels,
+                    max_pixels=processor.image_processor.max_pixels,
+                )
+            patch_num = len(images)
+            grid_h = resized_height // processor.image_processor.patch_size
+            grid_w = resized_width // processor.image_processor.patch_size
+            merge_length = processor.image_processor.merge_size**2
+            if patch_num == 1:
+                grid_t = 1
+            else:
+                grid_t = patch_num//processor.image_processor.temporal_patch_size
+            img_tokens =  pad_token*(grid_t*grid_h*grid_w//merge_length)
+            return '<|vision_start|>' + img_tokens + '<|vision_end|>',(grid_t,grid_h,grid_w)
+            
+        tokenizer.get_image_tokens = get_image_tokens
+        tokenizer.get_video_tokens = partial(get_image_tokens,pad_token='<|video_pad|>')
+        tokenizer.img_bos_token_id = tokenizer.convert_tokens_to_ids('<|vision_start|>')
+        tokenizer.img_eos_token_id = tokenizer.convert_tokens_to_ids('<|vision_end|>')
+        tokenizer.image_size = processor.image_processor.max_pixels
+
     return tokenizer,ROLE,PREFIX,ADAPT 
 
-def baichcuan_template(tokenizer): 
+def baichcuan_template(tokenizer,**kwargs): 
     
     PREFIX,ADAPT=[],[]
     tokenizer.im_end_id = tokenizer.eos_token_id
@@ -716,7 +747,7 @@ class ImageReaderCV2:
         pixel_values = np.stack(images).transpose(0,3,1,2)
         return pixel_values
 
-def internvl_template(tokenizer): 
+def internvl_template(tokenizer,**kwargs): 
     
     PREFIX,ADAPT=[],[]
     tokenizer.im_start_id =  tokenizer.encode('<|im_start|>')[0]
@@ -737,11 +768,23 @@ def internvl_template(tokenizer):
     
     try:
         config = AutoConfig.from_pretrained(tokenizer.name_or_path,trust_remote_code=True)
+        img_reader=ImageReaderCV2(max_num=kwargs['max_num'])
         num_image_token = int((config.vision_config.image_size // config.vision_config.patch_size) ** 2 * (config.downsample_ratio ** 2))
-        tokenizer.get_image_tokens = lambda n:'<img>' + '<IMG_CONTEXT>' * n * num_image_token + '</img>'
+        
+        def get_image_tokens(image):
+            if isinstance(image,int):return image
+            target_aspect_ratio,_ = img_reader.find_closest_aspect_ratio(image)
+            num_patches = target_aspect_ratio[0]*target_aspect_ratio[1]
+            num_patches = num_patches + int(num_patches>1)
+            tokens = '<img>' + '<IMG_CONTEXT>' * num_patches * num_image_token + '</img>'
+            return tokens,target_aspect_ratio
+        
+        tokenizer.get_image_tokens = get_image_tokens
         #tokenizer.img_context_token_id = tokenizer.convert_tokens_to_ids('<IMG_CONTEXT>')
         tokenizer.img_bos_token_id = tokenizer.convert_tokens_to_ids('<img>')
         tokenizer.img_eos_token_id = tokenizer.convert_tokens_to_ids('</img>')
+        tokenizer.image_size = config.vision_config.image_size**2
+        
     except:
         print('only llm!')
     
