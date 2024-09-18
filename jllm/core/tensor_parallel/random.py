@@ -7,7 +7,8 @@ import contextlib
 
 import torch
 from torch import _C
-from deepspeed.accelerator import get_accelerator
+from torch.cuda import _lazy_call
+from torch.cuda import device as device_ctx_manager
 from torch.utils.checkpoint import detach_variable
 
 from jllm.core.parallel_state import (
@@ -17,22 +18,13 @@ from jllm.core.parallel_state import (
     get_tensor_model_parallel_world_size,
 )
 
-from .utils import (
-    split_tensor_into_1d_equal_chunks,
-    gather_split_1d_tensor,
-)
-import deepspeed
+from .utils import gather_split_1d_tensor, split_tensor_into_1d_equal_chunks
 
 # Default name for the model parallel rng tracker.
 _MODEL_PARALLEL_RNG_TRACKER_NAME = 'model-parallel-rng'
+_EXPERT_PARALLEL_RNG_TRACKER_NAME = 'expert-parallel-rng'
+_DATA_PARALLEL_RNG_TRACKER_NAME = 'data-parallel-rng'
 
-# Whether apply model parallelsim to checkpointed hidden states.
-_CHECKPOINTED_ACTIVATIONS_MEMORY_BUFFER = None
-
-def reset_checkpointed_activations_memory_buffer():
-    """Reset the memory used for checkpointing."""
-    if _CHECKPOINTED_ACTIVATIONS_MEMORY_BUFFER is not None:
-        _CHECKPOINTED_ACTIVATIONS_MEMORY_BUFFER.reset()
 
 def _set_cuda_rng_state(new_state, device=-1):
     """Sets the random number generator state of the current GPU.
@@ -46,26 +38,36 @@ def _set_cuda_rng_state(new_state, device=-1):
     if hasattr(_C, '_cuda_setRNGState') and callable(_C._cuda_setRNGState):
         # older PyTorch
         def cb():
-            with get_accelerator().device(device):
+            with device_ctx_manager(device):
                 _C._cuda_setRNGState(new_state)
+
     else:
         # newer PyTorch
         if device == -1:
-            device = torch.device(get_accelerator().device_name())
+            device = torch.device('cuda')
         elif isinstance(device, str):
             device = torch.device(device)
         elif isinstance(device, int):
-            device = torch.device(get_accelerator().device_name(), device)
+            device = torch.device('cuda', device)
 
         def cb():
             idx = device.index
             if idx is None:
-                idx = get_accelerator().current_device()
-            default_generator = get_accelerator().default_generator(idx)
+                idx = torch.cuda.current_device()
+            default_generator = torch.cuda.default_generators[idx]
             default_generator.set_state(new_state)
 
-    get_accelerator().lazy_call(cb)
+    _lazy_call(cb)
 
+
+def get_expert_parallel_rng_tracker_name():
+    global _EXPERT_PARALLEL_RNG_TRACKER_NAME
+    return _EXPERT_PARALLEL_RNG_TRACKER_NAME
+
+
+def get_data_parallel_rng_tracker_name():
+    global _DATA_PARALLEL_RNG_TRACKER_NAME
+    return _DATA_PARALLEL_RNG_TRACKER_NAME
 
 
 class CudaRNGStatesTracker:
@@ -78,14 +80,21 @@ class CudaRNGStatesTracker:
     """
 
     def __init__(self):
-        # Map from a string name to the cuda rng state.
-        self.states_ = {}
-        # Seeds are just for book keeping and ensure no seed is set twice.
-        self.seeds_ = set()
+        self.reset()
+
+    def is_initialized(self):
+        return self._is_initialized
 
     def reset(self):
         """Set to the initial state (no tracker)."""
+
+        # Track if initialized.
+        self._is_initialized = False
+
+        # Map from a string name to the cuda rng state.
         self.states_ = {}
+
+        # Seeds are just for book keeping and ensure no seed is set twice.
         self.seeds_ = set()
 
     def get_states(self):
@@ -99,10 +108,12 @@ class CudaRNGStatesTracker:
     def set_states(self, states):
         """Set the rng states. For efficiency purposes, we do not check
         the size of seed for compatibility."""
+        self._is_initialized = True
         self.states_ = states
 
     def add(self, name, seed):
         """Track the rng state."""
+        self._is_initialized = True
         # Check seed is not already used.
         if seed in self.seeds_:
             raise Exception('seed {} already exists'.format(seed))
@@ -111,10 +122,10 @@ class CudaRNGStatesTracker:
         if name in self.states_:
             raise Exception('cuda rng state {} already exists'.format(name))
         # Get the current rng state.
-        orig_rng_state = get_accelerator().get_rng_state()
+        orig_rng_state = torch.cuda.get_rng_state()
         # Set the new state and store it.
-        get_accelerator().manual_seed(seed)
-        self.states_[name] = get_accelerator().get_rng_state()
+        torch.cuda.manual_seed(seed)
+        self.states_[name] = torch.cuda.get_rng_state()
         # Reset rng state to what it was.
         _set_cuda_rng_state(orig_rng_state)
 
@@ -124,10 +135,9 @@ class CudaRNGStatesTracker:
         the original state."""
         # Check if we have added the state
         if name not in self.states_:
-            print(name, self.states_)
             raise Exception('cuda rng state {} is not added'.format(name))
         # Store current rng state.
-        orig_cuda_rng_state = get_accelerator().get_rng_state()
+        orig_cuda_rng_state = torch.cuda.get_rng_state()
         # Set rng state to the desired one
         _set_cuda_rng_state(self.states_[name])
         # Do the stuff we wanted to do.
@@ -135,7 +145,7 @@ class CudaRNGStatesTracker:
             yield
         finally:
             # Update the current rng state for later use.
-            self.states_[name] = get_accelerator().get_rng_state()
+            self.states_[name] = torch.cuda.get_rng_state()
             # And set the state to the original state we started with.
             _set_cuda_rng_state(orig_cuda_rng_state)
 
@@ -143,11 +153,9 @@ class CudaRNGStatesTracker:
 # RNG tracker object.
 _CUDA_RNG_STATE_TRACKER = CudaRNGStatesTracker()
 
+
 def get_cuda_rng_tracker():
     """Get cuda rng tracker."""
-    if deepspeed.checkpointing.is_configured():
-        return deepspeed.checkpointing.get_cuda_rng_tracker()
-    
     return _CUDA_RNG_STATE_TRACKER
 
 
@@ -159,34 +167,25 @@ def model_parallel_cuda_manual_seed(seed):
     after this function. Basically, this is replacement for that
     function.
     Two set of RNG states are tracked:
-        default state: This is for data parallelism and is the same among a
-                       set of model parallel GPUs but different across
-                       different model paralle groups. This is used for
-                       example for dropout in the non-tensor-model-parallel regions.
-        tensor-model-parallel state: This state is different among a set of model
-                              parallel GPUs, but the same across data parallel
-                              groups. This is used for example for dropout in
-                              model parallel regions.
+    default state: This is for data parallelism and is the same among a set of model parallel GPUs but different across different model paralle groups. This is used for example for dropout in the non-tensor-model-parallel regions.
+    tensor-model-parallel state: This state is different among a set of model parallel GPUs, but the same across data parallel groups. This is used for example for dropout in model parallel regions.
     """
-    if deepspeed.checkpointing.is_configured():
-        return deepspeed.checkpointing.model_parallel_cuda_manual_seed(seed)
-    
     # 2718 is just for fun and any POSITIVE value will work.
     offset = seed + 2718
     tensor_model_parallel_seed = offset + get_tensor_model_parallel_rank()
     # Data parallel gets the original seed.
     data_parallel_seed = seed
 
-    if torch.distributed.get_rank() == 0:
-        print('> initializing model parallel cuda seeds on global rank {}, '
-              'model parallel rank {}, and data parallel rank {} with '
-              'model parallel seed: {} and data parallel seed: {}'.format(
-                  torch.distributed.get_rank(), get_tensor_model_parallel_rank(),
-                  get_data_parallel_rank(), tensor_model_parallel_seed,
-                  data_parallel_seed), flush=True)
     _CUDA_RNG_STATE_TRACKER.reset()
     # Set the default state.
-    get_accelerator().manual_seed(data_parallel_seed)
+    torch.cuda.manual_seed(data_parallel_seed)
+    _CUDA_RNG_STATE_TRACKER.add(_DATA_PARALLEL_RNG_TRACKER_NAME, data_parallel_seed)
+
     # and model parallel state.
-    _CUDA_RNG_STATE_TRACKER.add(_MODEL_PARALLEL_RNG_TRACKER_NAME,
-                                tensor_model_parallel_seed)
+    _CUDA_RNG_STATE_TRACKER.add(_MODEL_PARALLEL_RNG_TRACKER_NAME, tensor_model_parallel_seed)
+
+    expert_parallel_seed = (
+        seed + 1024 + get_tensor_model_parallel_rank()
+    )
+    _CUDA_RNG_STATE_TRACKER.add(_EXPERT_PARALLEL_RNG_TRACKER_NAME, expert_parallel_seed)
+

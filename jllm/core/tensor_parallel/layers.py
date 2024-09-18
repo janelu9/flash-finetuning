@@ -7,11 +7,7 @@ import io
 import math
 import os
 import warnings
-from abc import ABC
-from typing import Any, Callable, List, Optional, Tuple, Dict, Union, Iterable
-from dataclasses import dataclass, replace
-from itertools import chain
-import numpy as np
+from typing import Any, Callable, List, Optional, Tuple, Dict, Iterable, Iterator, Union
 
 import torch
 import torch.nn.functional as F
@@ -27,9 +23,13 @@ from jllm.core.parallel_state import (
     get_tensor_model_parallel_world_size,
 )
 from jllm.core import parallel_state
-# from ..dist_checkpointing.mapping import ShardedStateDict
-# from ..transformer.utils import make_sharded_tensors_for_checkpoint
-# from ..utils import make_tp_sharded_tensor_for_checkpoint, prepare_input_tensors_for_wgrad_compute
+#from ..dist_checkpointing.mapping import ShardedStateDict
+#from ..transformer.utils import make_sharded_tensors_for_checkpoint
+#from ..utils import make_tp_sharded_tensor_for_checkpoint, prepare_input_tensors_for_wgrad_compute
+from abc import ABC
+from dataclasses import dataclass, replace
+from itertools import chain
+import numpy as np
 from .mappings import (
     copy_to_tensor_model_parallel_region,
     gather_from_sequence_parallel_region,
@@ -38,7 +38,7 @@ from .mappings import (
     reduce_scatter_to_sequence_parallel_region,
     scatter_to_tensor_model_parallel_region,
 )
-from .random import get_cuda_rng_tracker
+from .random import get_cuda_rng_tracker, get_expert_parallel_rng_tracker_name
 from .utils import VocabUtility, divide, split_tensor_along_last_dim
 
 _grad_accum_fusion_available = True
@@ -221,26 +221,7 @@ class ShardedTensor(ShardedBase):
 
     def __str__(self):
         return f'{self.__class__.__name__}(key=\'{self.key}\')'
-
-
-def prepare_input_tensors_for_wgrad_compute(grad_output, all_gathered_input):
-
-    # Doing gather + slicing during the NeMo forward pass can make this tensor
-    # not be contiguous. PyTorch only checks if the tensor is contiguous, and only
-    # clones it if it's not contiguous:
-    # https://github.com/pytorch/pytorch/blob/c47cf9bc7f9e02f649ab4ed53fe4d35732c92ab6/torch/_refs/__init__.py#L2761
-    grad_output = grad_output.contiguous()
-    # Convert the tensor shapes to 2D for execution compatibility
-    if grad_output.dim() == 3:
-        grad_output = grad_output.view(
-            grad_output.shape[0] * grad_output.shape[1], grad_output.shape[2]
-        )
-        all_gathered_input = all_gathered_input.view(
-            all_gathered_input.shape[0] * all_gathered_input.shape[1], all_gathered_input.shape[2]
-        )
-
-    return grad_output, all_gathered_input
-
+        
 def make_tp_sharded_tensor_for_checkpoint(
     tensor, key, tp_axis=0, replica_id=None, prepend_offsets=(), **kwargs
 ):
@@ -268,6 +249,24 @@ def make_tp_sharded_tensor_for_checkpoint(
         **kwargs,
     )
 
+def prepare_input_tensors_for_wgrad_compute(grad_output, all_gathered_input):
+
+    # Doing gather + slicing during the NeMo forward pass can make this tensor
+    # not be contiguous. PyTorch only checks if the tensor is contiguous, and only
+    # clones it if it's not contiguous:
+    # https://github.com/pytorch/pytorch/blob/c47cf9bc7f9e02f649ab4ed53fe4d35732c92ab6/torch/_refs/__init__.py#L2761
+    grad_output = grad_output.contiguous()
+    # Convert the tensor shapes to 2D for execution compatibility
+    if grad_output.dim() == 3:
+        grad_output = grad_output.view(
+            grad_output.shape[0] * grad_output.shape[1], grad_output.shape[2]
+        )
+        all_gathered_input = all_gathered_input.view(
+            all_gathered_input.shape[0] * all_gathered_input.shape[1], all_gathered_input.shape[2]
+        )
+
+    return grad_output, all_gathered_input
+    
 def make_sharded_tensors_for_checkpoint(
     state_dict: StateDict,
     prefix: str,
@@ -320,7 +319,6 @@ def make_sharded_tensors_for_checkpoint(
 
     return sharded_state_dict
 
-
 def param_is_not_tensor_parallel_duplicate(param):
     return (hasattr(param, 'tensor_model_parallel') and param.tensor_model_parallel) or (
         get_tensor_model_parallel_rank() == 0
@@ -368,7 +366,8 @@ def _initialize_affine_weight_gpu(
         with get_cuda_rng_tracker().fork():
             init_method(weight)
     else:
-        pass
+        with get_cuda_rng_tracker().fork(get_expert_parallel_rng_tracker_name()):
+            init_method(weight)
 
 
 def _initialize_affine_weight_cpu(
