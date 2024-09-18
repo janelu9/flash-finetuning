@@ -1,0 +1,6 @@
+deepspeed
+protobuf
+sentencepiece
+transformers
+pyarrow
+tiktoken

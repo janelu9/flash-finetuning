@@ -588,7 +588,6 @@ def exe_adaptation():
     layers.mpu =parallel_state
     args=get_args()
     args.optimize_recomp_communication_status = 0
-    args.optimize_recomp_communication_level = 0
     args.recompute_num_layers = 0
     args.swap_attention = False
     
