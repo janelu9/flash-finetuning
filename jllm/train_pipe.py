@@ -22,6 +22,7 @@ from .model import (
     ModelPipe,
     )
 from .trainer import train
+from .ds_config import get_train_ds_config
 from deepspeed.ops.adam import DeepSpeedCPUAdam, FusedAdam
 from deepspeed.runtime.pipe import ProcessTopology
 import numpy as np
@@ -62,8 +63,8 @@ parser.add_argument('--tag',
                     help='checkpoint tag')
 parser.add_argument("--ds_config",
                     type=str,
-                    default= "ds_config.py",
-                    help="deepspeed's config file")
+                    default= None,
+                    help="deepspeed's config pyfile")
 parser.add_argument('--zero_stage',
                     type=int,
                     default=0,
@@ -250,7 +251,7 @@ parser.add_argument('--only_optimize_lora',
                     
 parser = deepspeed.add_config_arguments(parser)
 args=parser.parse_args()
-get_train_ds_config = importlib.import_module(os.path.splitext(args.ds_config)[0]).get_train_ds_config
+get_train_ds_config = importlib.import_module(os.path.splitext(args.ds_config)[0]).get_train_ds_config if args.ds_config is not None else get_train_ds_config
 assert args.early_stop != 0
 assert args.max_num_checkpoints != 0
 assert args.best_of>0

@@ -16,14 +16,14 @@ def get_train_ds_config(offload,
     zero_opt_dict = {
         "stage": stage,
         
-        "reduce_bucket_size": 500000000,
-        "reduce_scatter": True,
+        # "reduce_bucket_size": 500000000,
+        # "reduce_scatter": True,
         # zero++ requires deepspeed>=0.10.0
         # "zero_quantized_weights": True,
         # "zero_hpz_partition_size": 16,
         # "zero_quantized_gradients": True,
 
-        "contiguous_gradients": True,
+        # "contiguous_gradients": True,
         # "overlap_comm": True,
         
         
@@ -33,7 +33,7 @@ def get_train_ds_config(offload,
         "offload_optimizer": {
             "device": device,
         },
-        "stage3_param_persistence_threshold": 1e6,
+        "stage3_param_persistence_threshold": 1e4,
         "stage3_max_live_parameters": 3e7,
         "stage3_prefetch_bucket_size": 3e7,
         "memory_efficient_linear": False
@@ -49,11 +49,11 @@ def get_train_ds_config(offload,
     return {
         "train_batch_size": GLOBAL_BATCH_SIZE,
         "train_micro_batch_size_per_gpu": MICRO_BATCH_SIZE,
-        "steps_per_print": 20,
+        "steps_per_print": 1,
         "zero_allow_untested_optimizer": True,
         "zero_optimization": zero_opt_dict,
         "activation_checkpointing" :activation_checkpointing,
-        # "fp16": {"enabled": True,"loss_scale_window": 1000},
+        # "fp16": {"enabled": True,"loss_scale_window": 100},
         "bf16": {"enabled": True},
         # "optimizer": {
             # "type": "AdamW",
