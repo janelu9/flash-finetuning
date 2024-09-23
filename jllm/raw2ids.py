@@ -184,7 +184,6 @@ def write_parquet(filename,
                   stack=False,
                   max_num=1,
                   image_path='',
-                  sep=False,
                   padding=False):
     
     tokenizer = AutoTokenizer.from_pretrained(tokenizer,use_fast=True,trust_remote_code=True,add_bos_token = False)
@@ -197,11 +196,9 @@ def write_parquet(filename,
             token = partial(token_finetune, ROLE=ROLE, PREFIX=PREFIX, ADAPT=ADAPT,padding=padding)
         else:
             token = partial(token_vl, ROLE=ROLE, PREFIX=PREFIX, ADAPT=ADAPT, 
-                            img_reader=ImageReaderCV2(max_num=max_num),
                             image_path=image_path,
-                            sep = output_dir if sep else None,
+                            output_dir = output_dir,
                             padding=padding)
-            auto_batch_size = True if not sep else False
     else:
         token = partial(token_pretrain,stack = stack)
     item_iter = token(filename,tokenizer,MAX_SEQ_LENGTH)
@@ -214,11 +211,12 @@ def write_parquet(filename,
         return
     if not os.path.exists(partition_dir):
         os.makedirs(partition_dir)
-
+    max_seq_len = 0
     if not auto_batch_size:
         pbar = tqdm.tqdm(float("inf"))
         data = next(item_iter)
         data_batch={k:[data[k]] for k in data}
+        max_seq_len = max(max_seq_len,len(data['input_ids']))
         i=0
         pbar.update(1)
         try:
@@ -226,6 +224,7 @@ def write_parquet(filename,
                 for _ in range(batch_size-1):
                     data = next(item_iter)
                     for k in data:data_batch[k].append(data[k])
+                    max_seq_len = max(max_seq_len,len(data['input_ids']))
                     i+=1
                     pbar.update(1)
                     
@@ -238,6 +237,7 @@ def write_parquet(filename,
                 
                 data = next(item_iter)
                 data_batch={k:[data[k]] for k in data}
+                max_seq_len = max(max_seq_len,len(data['input_ids']))
                 i+=1
                 pbar.update(1)
                 
@@ -252,6 +252,7 @@ def write_parquet(filename,
         pbar = tqdm.tqdm(float("inf"))
         data = next(item_iter)
         data_batch={k:[data[k]] for k in data}
+        max_seq_len = max(max_seq_len,len(data['input_ids']))
         element_num = sum(data[k].size for k in data)
         i=0
         p=0
@@ -261,6 +262,7 @@ def write_parquet(filename,
             pbar.update(1)
             for k in data: 
                 data_batch[k].append(data[k])
+                max_seq_len = max(max_seq_len,len(data['input_ids']))
                 element_num+=data[k].size 
             if element_num > NUM_ELEMENT_LIMIT:
                 pyarrow.parquet.write_table(pyarrow.table(data_batch),
@@ -278,61 +280,55 @@ def write_parquet(filename,
                                         compression=compression) 
 
     del data_batch                                
-    os.system(f"echo '{i+1} {MAX_SEQ_LENGTH} {batch_size} {len(data.keys())}' > {check_file}")
+    os.system(f"echo '{i+1} {max_seq_len} {batch_size} {len(data.keys())}' > {check_file}")
     print(f"{filename} stored in parquet with {i+1} samples")
     gc.collect()
 
 def token_vl(file,tokenizer,MAX_SEQ_LENGTH,ROLE = {},PREFIX = [],ADAPT = []
-             ,img_reader=None,image_path='',sep = None,padding = False):
+             ,output_dir='',image_path='',padding = False):
 
     from jllm.data.utils import qa_inputs_generator,img_token_alignment
     
-    if sep:
-        images_database = {}
-        def replace_image_token(v):
-            if not isinstance(v,str):
-                v,*imgs = v
-                pixes = []
-                for img in imgs:
-                    try:
-                        if img not in images_database:
-                            image = cv2.imread(os.path.join(image_path,img))
-                            image_tokens,resize_info = tokenizer.get_image_tokens(image)
-                            images_database[img] = (image_tokens,resize_info)
-                        else:
-                            image_tokens,_ = images_database[img]
-                        v=v.replace('<image>', image_tokens,1)
-                        pixes.append(img)
-                    except:
-                        v=v.replace('<image>', '<图片>',1)
-                        pixes.append('')
-                return v,pixes if len(pixes) else ['']
-            return v,['']
-    else:
-        def replace_image_token(v):
-            if not isinstance(v,str):
-                v,*imgs = v
-                pixes = []
-                for img in imgs:
-                    try:
-                        pix_v = img_reader(os.path.join(image_path,img))
-                        image_tokens = tokenizer.get_image_tokens(pix_v.shape[0])
-                        v=v.replace('<image>', image_tokens,1)
-                        pixes.append(pix_v.reshape(-1))
-                    except:
-                        v=v.replace('<image>', '<图片>',1)
-                return v,pixes if pixes else [np.empty(0,dtype=np.uint8)]
-            return v,[np.empty(0,dtype=np.uint8)]
+    max_num_patches = 0
+    max_num_images = 0
+    images_database = {}
+    def replace_image_token(v):
+        if not isinstance(v,str):
+            v,*imgs = v
+            pixes = []
+            num_patches = 0
+            num_images = 0
+            for img in imgs:
+                try:
+                    if img not in images_database:
+                        image = cv2.imread(os.path.join(image_path,img))
+                        image_tokens,resize_info,num_patch = tokenizer.get_image_tokens(image)
+                        images_database[img] = (image_tokens,resize_info,num_patch)
+                    else:
+                        image_tokens,_,num_patch = images_database[img]
+                    v=v.replace('<image>', image_tokens,1)
+                    pixes.append(img)
+                    num_patches+=num_patch
+                    num_images+=1
+                except:
+                    v=v.replace('<image>', '<图片>',1)
+                    pixes.append('')
+            return v,pixes if len(pixes) else [''],num_patches,num_images
+        return v,[''],0,0
 
     for sample in finetune_generator(file):
         js = json.loads(sample.strip())
         pmt_anses = js['conversation'] if 'conversation' in js else js
         if len(pmt_anses) > 1:
             msgs = (PREFIX + pmt_anses) if 'system' not in pmt_anses[0] else pmt_anses
-            ids = []; divide = [0]; pixes = []
+            ids = []
+            divide = [0]
+            pixes = []
+            num_patches = []
+            num_images = []
             for start,msg in enumerate(msgs):
                 k,v = next(iter(msg.items()))
-                v,p = replace_image_token(v)
+                v,p,nps,nis = replace_image_token(v)
                 if k != "assistant":
                     ids.extend(ROLE[k] if k == 'system' or len(ROLE[k])==1 else ROLE[k][1:])
                     ids.extend(tokenizer.encode(v))
@@ -342,13 +338,17 @@ def token_vl(file,tokenizer,MAX_SEQ_LENGTH,ROLE = {},PREFIX = [],ADAPT = []
             if k != 'system':
                 ids = ADAPT + ids
                 pixes.append(p)
-            
+                num_patches.append(nps)
+                num_images.append(nis)
+                
             for msg in msgs[start+1:]:
                 k,v = next(iter(msg.items()))
-                v,p = replace_image_token(v)
+                v,p,nps,nis = replace_image_token(v)
                 if k != pre_k:
                     if k != "assistant":
                         pixes.append(p)
+                        num_patches.append(nps)
+                        num_images.append(nis)
                         ids.append(tokenizer.im_end_id)
                         if pre_k != "system":
                             divide.append(len(ids))
@@ -381,30 +381,26 @@ def token_vl(file,tokenizer,MAX_SEQ_LENGTH,ROLE = {},PREFIX = [],ADAPT = []
                     matched = None
                     if s == divide[0] and e == divide[-2]:
                         matched = True
-                        si,ei=0,0
+                        si,ei=0,len(divide)//2
                     else:
                         si,ei = np.searchsorted(divide,[s,e],side='right')
                         si = (si-1)//2
                         ei = (ei-1)//2+1
                         
-                    if not sep:
-                        qa_vl_inputs = img_token_alignment((tokenizer.img_bos_token_id,tokenizer.img_eos_token_id),qa_inputs,pixes,matched,(si,ei))
-                        if qa_vl_inputs is not None:
-                            qa_vl_inputs['images'] = np.hstack(qa_vl_inputs['images'])
-                            yield qa_vl_inputs
-                    else:
-                        qa_inputs.update({'image_ids':pixes,'matched':matched,'siei':(si,ei)})
-                        yield qa_inputs
-    if sep:
-        partition_file = os.path.join(sep , "image.info")
-        data = {'pic':[],'rat':[]}
-        for k,v in images_database.items():
-            data['pic'].append(k)
-            data['rat'].append(v[1])
-        data['pic'].append(os.path.abspath(image_path))
-        data['rat'].append(np.array([tokenizer.img_bos_token_id,tokenizer.img_eos_token_id,tokenizer.image_size]))
-        pyarrow.parquet.write_table(pyarrow.table(data),partition_file)
-        print(f"\nAvailable pictures: {len(data['pic'])-1}")   
+                    qa_inputs.update({'image_ids':pixes,'matched':matched,'siei':(si,ei)})
+                    max_num_patches = max(max_num_patches,sum(num_patches[si:ei]))
+                    max_num_images = max(max_num_images,sum(num_images[si:ei]))
+                    yield qa_inputs
+
+    partition_file = os.path.join(output_dir , "image.info")
+    data = {'pic':[],'rat':[]}
+    for k,v in images_database.items():
+        data['pic'].append(k)
+        data['rat'].append(v[1])
+    data['pic'].append(os.path.abspath(image_path))
+    data['rat'].append(np.array([tokenizer.img_bos_token_id,tokenizer.img_eos_token_id,tokenizer.image_size,max_num_patches,max_num_images]))
+    pyarrow.parquet.write_table(pyarrow.table(data),partition_file)
+    print(f"\nAvailable pictures: {len(data['pic'])-1}")   
 
 def main(args):
     print(args)
@@ -442,7 +438,6 @@ def main(args):
                        stack=args.stack,
                        max_num=args.max_num,
                        image_path=args.image_path,
-                       sep=args.sep,
                        padding=args.pad)
         files =[os.path.join(tmp, i) for i in os.listdir(tmp)]
         files.sort()
@@ -588,8 +583,9 @@ def qwen2_template(tokenizer,**kwargs):
                 grid_t = 1
             else:
                 grid_t = patch_num//processor.image_processor.temporal_patch_size
-            img_tokens =  pad_token*(grid_t*grid_h*grid_w//merge_length)
-            return '<|vision_start|>' + img_tokens + '<|vision_end|>',(grid_t,grid_h,grid_w)
+            num_patches = grid_t*grid_h*grid_w
+            img_tokens =  num_patches//merge_length
+            return '<|vision_start|>' + pad_token*img_tokens + '<|vision_end|>',(grid_t,grid_h,grid_w),num_patches
             
         tokenizer.get_image_tokens = get_image_tokens
         tokenizer.get_video_tokens = partial(get_image_tokens,pad_token='<|video_pad|>')
@@ -776,8 +772,9 @@ def internvl_template(tokenizer,**kwargs):
             target_aspect_ratio,_ = img_reader.find_closest_aspect_ratio(image)
             num_patches = target_aspect_ratio[0]*target_aspect_ratio[1]
             num_patches = num_patches + int(num_patches>1)
-            tokens = '<img>' + '<IMG_CONTEXT>' * num_patches * num_image_token + '</img>'
-            return tokens,target_aspect_ratio
+            img_tokens = num_patches * num_image_token
+            tokens = '<img>' + '<IMG_CONTEXT>' *img_tokens  + '</img>'
+            return tokens,target_aspect_ratio,num_patches
         
         tokenizer.get_image_tokens = get_image_tokens
         #tokenizer.img_context_token_id = tokenizer.convert_tokens_to_ids('<IMG_CONTEXT>')
@@ -818,7 +815,6 @@ if __name__=='__main__':
     parser.add_argument('--stack', action='store_true', help="stack tokens")
     parser.add_argument('-T', action='store_true', help="thread")
     parser.add_argument('-C', action='store_true', help="clean")
-    parser.add_argument('--sep', action='store_true', help="separate text and images.")
     parser.add_argument('--pad', action='store_true', help="pad the token.")
     args = parser.parse_args()
     main(args)
