@@ -316,7 +316,6 @@ def main(args):
     config.seq_len = args.seq_len
     config.lora = args.lora_dim>0
     config.lora_alpha = args.lora_alpha
-    args.image_size = getattr(config,'force_image_size',None)
 
     if args.num_layers_per_decoder:
         config.split_dlayer = True
@@ -384,7 +383,7 @@ def main(args):
             base_seed=args.seed,
             partition_method=partition_method,
             )
-        
+    
     if not(args.resume_ckpt or args.from_ckpt) and not args.init: 
         model.from_pretrained(args.model,args.cache_model)
         if args.only_cache_model:
