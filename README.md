@@ -8,7 +8,7 @@ Training Large Language Model faster, easily and low-cost.
 
 ✦ Flash speed when fine-tuning because of  no redundant computation .
 
-✦ Make PCIE as fast as NVlinks under ten billion level model.
+✦ Make PCIE as fast as NVlinks under 20 billion level model.
 
 ## Installation
 
@@ -37,18 +37,15 @@ For Vision Language Model:
 
 ```shell
 python -m jllm.raw2ids \
-    --tokenizer InternVL2-8B \
+    --tokenizer Qwen2-VL-7B-Instruct \
     -i dataset_vl.jsonl \
     --image_path images \
     --max_len 8192 \
-    --sep
 ```
 
 Folder `images` stores all the images data.  Format of  `dataset_vl.jsonl` is like:
 
 `[{'user':['Give a description of these pictures please.\n <image>....','image0.jpg',...]},{'assistant':'This is ....'}]`
-
-`--sep` indicates not saving image features into parquet because of large disk space occupation, patches will be generated during training.
 
 ### Shuffle
 
@@ -183,6 +180,7 @@ python -m jllm.nolora_ckpt2hf \
 |  qwen2-moe   |             -             |
 |  internlm2   |             -             |
 |  internvl2   |             -             |
+|   qwen2-vl   |             -             |
 
 ***Note**: The training speed of each model was measured on 64 NVIDIA A100-PCIE-40GB GPUs linked by 100Gb/s bandwidth of InfiniBand with data type of bfloat16 and batch token size of 2048\*2048 (batch_size\*sequence_length,  batch_size = micro_batch_size \* gradient_accumulation_steps).*
 

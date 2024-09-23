@@ -91,10 +91,6 @@ parser.add_argument('--encoder_pipe_parallel_size',
                     type=int,
                     default=0,
                     help="encoder's pipe parallel size")
-parser.add_argument('--max_num_images',
-                    type=int,
-                    default=16,
-                    help="num images per sample")
 parser.add_argument('--model_parallel_size',
                     type=int,
                     default=1,
@@ -211,10 +207,6 @@ parser.add_argument('--no_checkpoint_grad_step',
                     type=int,
                     default=1000000,
                     help='no checkpoint grad step')
-parser.add_argument('--optimize_recomp_communication_level',
-                    type=int,
-                    default=2,
-                    help='ascend\'s recomp communication level.')
 parser.add_argument('--low_mem',
                     action='store_true',
                     help='lower memory usage.')
