@@ -326,6 +326,8 @@ def main(args):
     else:
         if hasattr(config,'llm_config'):
             config.partition_method = autopartition_decoder(config.llm_config,args)
+        elif hasattr(config,'vision_config') and not hasattr(config,'llm_config'):
+            config.partition_method = autopartition_decoder(config,args)
         else:
             config.partition_method = autopartition_transformer(config,args)
     config.one_layerspec = not args.multi_layerspec
