@@ -182,14 +182,13 @@ def write_parquet(filename,
                   batch_size=2**15,
                   compression='gzip',
                   stack=False,
-                  max_num=1,
                   image_path='',
                   padding=False):
     
     tokenizer = AutoTokenizer.from_pretrained(tokenizer,use_fast=True,trust_remote_code=True,add_bos_token = False)
     tokenizer.encode = partial(tokenizer.encode,add_special_tokens=False)
     tokenizer_class = tokenizer.__class__.__name__ 
-    tokenizer,ROLE,PREFIX,ADAPT = TOKENIZER[tokenizer_class](tokenizer, max_num=max_num)
+    tokenizer,ROLE,PREFIX,ADAPT = TOKENIZER[tokenizer_class](tokenizer)
     auto_batch_size = False
     if dtype == 'ft':
         if not hasattr(tokenizer,'get_image_tokens'):
@@ -436,7 +435,6 @@ def main(args):
                        batch_size=args.batch_size,
                        compression=args.c.lower(),
                        stack=args.stack,
-                       max_num=args.max_num,
                        image_path=args.image_path,
                        padding=args.pad)
         files =[os.path.join(tmp, i) for i in os.listdir(tmp)]
@@ -573,7 +571,7 @@ def qwen2_template(tokenizer,**kwargs):
                     width,
                     factor=processor.image_processor.patch_size * processor.image_processor.merge_size,
                     min_pixels=processor.image_processor.min_pixels,
-                    max_pixels=processor.image_processor.max_pixels,
+                    max_pixels=args.max_pixels,
                 )
             patch_num = len(images)
             grid_h = resized_height // processor.image_processor.patch_size
@@ -591,7 +589,7 @@ def qwen2_template(tokenizer,**kwargs):
         tokenizer.get_video_tokens = partial(get_image_tokens,pad_token='<|video_pad|>')
         tokenizer.img_bos_token_id = tokenizer.convert_tokens_to_ids('<|vision_start|>')
         tokenizer.img_eos_token_id = tokenizer.convert_tokens_to_ids('<|vision_end|>')
-        tokenizer.image_size = processor.image_processor.max_pixels
+        tokenizer.image_size = args.max_pixels
 
     return tokenizer,ROLE,PREFIX,ADAPT 
 
@@ -764,7 +762,7 @@ def internvl_template(tokenizer,**kwargs):
     
     try:
         config = AutoConfig.from_pretrained(tokenizer.name_or_path,trust_remote_code=True)
-        img_reader=ImageReaderCV2(max_num=kwargs['max_num'])
+        img_reader=ImageReaderCV2(max_num=args.max_num)
         num_image_token = int((config.vision_config.image_size // config.vision_config.patch_size) ** 2 * (config.downsample_ratio ** 2))
         
         def get_image_tokens(image):
@@ -809,6 +807,7 @@ if __name__=='__main__':
     parser.add_argument('--max_len', type=int, default=2**11)
     parser.add_argument('--cores', type=int, default=-1)
     parser.add_argument('--max_num', type=int, default=1)
+    parser.add_argument('--max_pixels', type=int, default=1920*1080)
     parser.add_argument('--tokenizer', type=str, default="openlm-research/open_llama_13b")
     parser.add_argument('--image_path', type=str, default="")
     parser.add_argument('--tmp', type=str, default="tmp")
