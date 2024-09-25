@@ -33,7 +33,7 @@ python -m jllm.raw2ids \
 
 ***Note**: Samples of pre-train dataset should be separated by `'\n\n'` in text files or be the value of  key`'text'` in jsonl files. Fine-tune dataset's format should be `[{'system':content},{'user':content},{'assistant':content},...] ` in each row of jsonl files, key`'system'` is not necessary.*
 
-For Vision Language Model:
+**For Vision Language Model:**
 
 ```shell
 python -m jllm.raw2ids \
@@ -47,7 +47,7 @@ Folder `images` stores all the images data.  Format of  `dataset_vl.jsonl` is li
 
 `[{'user':['Give a description of these pictures please.\n <image>....','image0.jpg',...]},{'assistant':'This is ....'}]`
 
-### Shuffle
+### Shuffle (For Pretrain)
 
 If you have multiple datasets, you shouldn't skip this step. It could shuffle all the datasets globally by rows like [Spark](https://spark.apache.org) doing. 
 
@@ -93,7 +93,7 @@ shuffled_datasets/
     └── dataset1_Qwen1.5-14B-Chat-00000-00003.gzip.parquet
 ```
 
-### Repartition 
+### Repartition (For Pretrain)
 
 Optional but recommended. 1B token ids in parquet files take up to 2G of hard disk at most but require approximately 10G of CPU memory. Setting `num_partition` according to the CPU memory of each worker.
 
@@ -127,16 +127,16 @@ shuffled_datasets/
 ```shell
 deepspeed -H $HOSTFILE \
     --module jllm.train_pipe \
-    --model Qwen1.5-14B-Chat \
-    --train_data shuffled_datasets \
+    --model Qwen2-VL-7B-Instruct \
+    --train_data dataset_vl_Qwen2-VL-7B-Instruct \
     --pipe_parallel_size 8 \
-    --model_parallel_size 1 \
+    --encoder_pipe_parallel_size 2 \
     --per_device_train_batch_size 1 \
     --gradient_accumulation_steps 32 \
-    --ds_config ds_config.py \
+    --only_ckpt_model \
     --checkpoint checkpoint \
     --max_num_checkpoints 2 \
-    --partition_method fast \
+    --partition_method 11,2 \
     --split_dlayer \
     --checkpoint_grad_interval 1
 ```
