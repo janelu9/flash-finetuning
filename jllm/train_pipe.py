@@ -193,6 +193,9 @@ parser.add_argument('--max_num_checkpoints',
 parser.add_argument('--only_ckpt_model',
                     action='store_true',
                     help='Only checkpoint the model parameters.')
+parser.add_argument('--only_ckpt_lora',
+                    action='store_true',
+                    help='Only checkpoint the lora parameters.')
 parser.add_argument('--only_cache_model',
                     action='store_true',
                     help='Only cache the model.')
@@ -256,6 +259,7 @@ assert args.early_stop != 0
 assert args.max_num_checkpoints != 0
 assert args.best_of>0
 if args.max_num_checkpoints<0:args.best_of=1
+if args.only_ckpt_lora:args.only_ckpt_model = True
 args.device = deepspeed.get_accelerator().device_name()
 if args.device == 'npu':
     import torch_npu
@@ -317,6 +321,7 @@ def main(args):
     config.seq_len = args.seq_len
     config.lora = args.lora_dim>0
     config.lora_alpha = args.lora_alpha
+    config.only_ckpt_lora = args.only_ckpt_lora
 
     if args.num_layers_per_decoder:
         config.split_dlayer = True
