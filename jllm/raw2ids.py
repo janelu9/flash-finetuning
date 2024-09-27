@@ -553,7 +553,9 @@ def qwen2_template(tokenizer,**kwargs):
         'user': nl_token_id + [tokenizer.im_start_id] + user_id + nl_token_id,
         'assistant': [tokenizer.im_end_id] + nl_token_id + [tokenizer.im_start_id] + assistant_id + nl_token_id
     }
-    PREFIX = [{"system":"You are a helpful assistant."}]
+    PREFIX = [{'system':'You are a helpful assistant.'}]
+    if 'You are Qwen, created by Alibaba Cloud. You are a helpful assistant.' in tokenizer.chat_template:
+        PREFIX = [{'system':'You are Qwen, created by Alibaba Cloud. You are a helpful assistant.'}]
     
     config = AutoConfig.from_pretrained(tokenizer.name_or_path)
     if hasattr(config,'vision_config'):
