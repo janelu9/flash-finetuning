@@ -3,58 +3,61 @@ import gc
 from concurrent.futures import ProcessPoolExecutor
 import torch
 import tqdm
+import json
 import argparse
+from safetensors.torch import save_file, load_file
+from functools import partial
+save_file=partial(save_file,metadata={'format': 'pt'})
 
 if __name__=='__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('-c','--ckpt', type=str, help="checkpoint.")
-    parser.add_argument('-h','--hf',type=str,default="",help="Where to store the model.")
+    parser.add_argument('-C','--ckpt', type=str, help="checkpoint.")
+    parser.add_argument('-H','--hf',type=str,default="",help="Where to store the model.")
     args = parser.parse_args()
     args.hf = (args.ckpt+"_hf") if not args.hf else args.hf
     os.makedirs(args.hf,exist_ok=True)
     ckpt_path = args.ckpt
     files = os.listdir(ckpt_path)
-    device = torch.device('cpu')
     
-    meta_datas = [f for f in files if f[:6]=='tensor' and f[7] == '0']
+    files = [f for f in files if f.endswith('safetensors')]
+    meta_datas = [f for f in files if f.split('-')[1] == '01']
     num_stages = len(meta_datas)
-
+    
     def func(meta_data):
-        pipe_rank = int(meta_data[23:26])
-        pts = [(int(f[7]),torch.load(os.path.join(ckpt_path,f), map_location=device)) for f in files if f[8:] == meta_data[8:]]
+        
+        pipe_rank = int(meta_data.rsplit('-',3)[1])
+        pts = [(int(f.split('-')[1]),load_file(os.path.join(ckpt_path,f))) for f in files if int(f.rsplit('-',3)[1])==pipe_rank]
         pts.sort(key = lambda x:x[0])
         
         keys = list(pts[0][1].keys())
-        cur_state_dict ={}
+        state_dict ={}
         
-        for k in keys:
-            if 'input_layernorm' in k:
-                q_local_dim = pts[0][1][k].numel()//len(pts)
-                break
-                
+        index = {"metadata":{"total_size":0},"weight_map":{}}
+        model_file =f"model-{pipe_rank:05d}-of-"+f"{num_stages:05d}.safetensors"
+        
         for k in tqdm.tqdm(keys):
-            if "embed_tokens" in k or "lm_head" in k:
-                state_dict[k] = torch.cat([p[1].pop(k) for p in pts],0)
-            elif "o_proj" in k or "down_proj" in k:
+            if  "o_proj" in k or "down_proj" in k in k:
                 state_dict[k] = torch.cat([p[1].pop(k) for p in pts],1)
-            elif "qkv_proj" in k:
-                kv_local_dim = (pts[0][1][k].shape[-1] - q_local_dim)//2
-                qkvs =[p[1].pop(k).split([q_local_dim,kv_local_dim,kv_local_dim],1) for p in pts]
-                state_dict[k.replace("qkv_proj","q_proj")] = torch.cat([q[0] for q in qkvs],0)
-                state_dict[k.replace("qkv_proj","k_proj")] = torch.cat([k[1] for k in qkvs],0)
-                state_dict[k.replace("qkv_proj","v_proj")] = torch.cat([v[2] for v in qkvs],0)
-            elif "gate_up_proj" in k:
-                gate_up_proj = torch.cat([p[1].pop(k) for p in pts],0)
-                state_dict[k.replace("gate_up_proj","gate_proj")],state_dict[k.replace("gate_up_proj","up_proj")] = gate_up_proj.chunk(2)
+            elif "lm_head" in k or "gate_proj" in k or "up_proj" in k or "embed_tokens" in k\
+            or "q_proj" in k or "k_proj" in k or "v_proj" in k:
+                state_dict[k] = torch.cat([p[1].pop(k) for p in pts])
             else:
                 state_dict[k] = pts[0][1].pop(k)
-            
+            index["metadata"]["total_size"] +=state_dict[k].nbytes
+            index["weight_map"].update({k:model_file})
         del pts
         gc.collect()
-        
-        torch.save(cur_state_dict, os.path.join(args.hf,
-                     f"pytorch_model-{pipe_rank:05d}-of-{num_stages:05d}.bin" if num_stages>1 else "pytorch_model.bin"))
+        save_file(state_dict,os.path.join(args.hf,model_file if num_stages>1 else "model.safetensors"))
+        return index
 
     with ProcessPoolExecutor(max_workers=min(num_stages,32)) as exe:
-        [i for i in tqdm.tqdm(exe.map(func,meta_datas))]
+        res = list(exe.map(func,meta_datas))
+        
+    if num_stages>1:
+        index = {"metadata":{"total_size":0},"weight_map":{}}
+        for r in res:
+            index["metadata"]["total_size"] += r["metadata"]["total_size"]
+            index["weight_map"].update(r["weight_map"])
+        with open(os.path.join(args.hf ,"model.safetensors.index.json"),'w') as f:
+            json.dump(index,f,indent=2)
     print("Done!")
