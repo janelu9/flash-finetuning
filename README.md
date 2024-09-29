@@ -147,27 +147,26 @@ Generally, every GPU process reads one piece of data, that means one node with 8
 
 The engine was designed to save checkpoint through background process by default to save more time for training. **Don't save checkpoint too frequently** unless you disable checkpoint in background via the argument '`--background_executor none`' to avoid out of CPU memory.
 
-Setting `partition_method` to be `fast` will always get a faster training when GPU memory are enough.
+Setting `--partition_method` to be `fast` will always get a faster training when GPU memory are enough.
 
 #### Checkpoint Conversion
 
-Convert model's weights in checkpoint to HF format.
+If argument `--only_ckpt_model`  is enabled , engine will directly only checkpoint model's weights with HF's format.
+
+You can also convert model's weights from deepspeed's checkpoint to HF's format by `jllm.train_pipe`, such as:
 
 ```shell
-deepspeed --module jllm.ckpt2hf \
-	--model Qwen1.5-14B-Chat \
-	--pipe_parallel_size 8 \
-	--ckpt checkpoint \
-	--hf Qwen1.5-14B-Chat-Finetune
-```
-
-If your model don't have any `lora` weights, you can also convert the checkpoint without GPUs by:
-
-```shell
-python -m jllm.nolora_ckpt2hf \
-	--model Qwen1.5-14B-Chat \
-	--ckpt checkpoint \
-	--hf Qwen1.5-14B-Chat-Finetune
+deepspeed -H $HOSTFILE \
+    --module jllm.train_pipe \
+    --model Qwen2-VL-7B-Instruct \
+    --train_data dataset_vl_Qwen2-VL-7B-Instruct \
+    --pipe_parallel_size 8 \
+    --encoder_pipe_parallel_size 2 \
+    --partition_method 11,2 \
+    --split_dlayer \
+    --num_train_epochs 0 \
+    --from_ckpt checkpoint --tag 1000 \
+    --output_dir output_path
 ```
 
 #### Supported Models
