@@ -53,6 +53,9 @@ parser.add_argument("--from_ckpt",
                     type=str,
                     default= "",
                     help="ckpt dir to load pretrained model parameters")
+parser.add_argument("--no_skip",
+                    action='store_true',
+                    help="not skip the remembered epochs and partitions")
 parser.add_argument("--resume_ckpt",
                     type=str,
                     default= "",
