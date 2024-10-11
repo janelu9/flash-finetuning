@@ -120,7 +120,7 @@ def finetune_generator(file):
             yield line
             line = f.readline()
 
-def token_finetune(file,tokenizer,MAX_SEQ_LENGTH,ROLE = {},PREFIX = [],ADAPT = [],padding=False):
+def token_finetune(file,tokenizer,MAX_SEQ_LENGTH,ROLE = {},PREFIX = [],ADAPT = [],padding=False,filter_null=False):
     from jllm.data.utils import qa_inputs_generator
     for sample in finetune_generator(file):
         js = json.loads(sample.strip())
@@ -170,6 +170,10 @@ def token_finetune(file,tokenizer,MAX_SEQ_LENGTH,ROLE = {},PREFIX = [],ADAPT = [
                                                        pad_token_id = tokenizer.pad_token_id,
                                                        IGNORE_TOKEN_ID = -100,
                                                        padding = padding):
+                    if filter_null:
+                        if np.all(qa_inputs['labels']==-100):
+                            continue
+                            
                     if 'category' in js:
                         qa_inputs.update({"prompt_len":divide[1],"classes":int(js['category'])})
                     yield qa_inputs
@@ -183,7 +187,8 @@ def write_parquet(filename,
                   compression='gzip',
                   stack=False,
                   image_path='',
-                  padding=False):
+                  padding=False,
+                  filter_null=False):
     
     tokenizer = AutoTokenizer.from_pretrained(tokenizer,use_fast=True,trust_remote_code=True,add_bos_token = False)
     tokenizer.encode = partial(tokenizer.encode,add_special_tokens=False)
@@ -192,12 +197,12 @@ def write_parquet(filename,
     auto_batch_size = False
     if dtype == 'ft':
         if not hasattr(tokenizer,'get_image_tokens'):
-            token = partial(token_finetune, ROLE=ROLE, PREFIX=PREFIX, ADAPT=ADAPT,padding=padding)
+            token = partial(token_finetune, ROLE=ROLE, PREFIX=PREFIX, ADAPT=ADAPT,padding=padding,filter_null=filter_null)
         else:
             token = partial(token_vl, ROLE=ROLE, PREFIX=PREFIX, ADAPT=ADAPT, 
                             image_path=image_path,
                             output_dir = output_dir,
-                            padding=padding)
+                            padding=padding,filter_null=filter_null)
     else:
         token = partial(token_pretrain,stack = stack)
     item_iter = token(filename,tokenizer,MAX_SEQ_LENGTH)
@@ -284,7 +289,7 @@ def write_parquet(filename,
     gc.collect()
 
 def token_vl(file,tokenizer,MAX_SEQ_LENGTH,ROLE = {},PREFIX = [],ADAPT = []
-             ,output_dir='',image_path='',padding = False):
+             ,output_dir='',image_path='',padding = False,filter_null=False):
 
     from jllm.data.utils import qa_inputs_generator,img_token_alignment
     
@@ -375,6 +380,10 @@ def token_vl(file,tokenizer,MAX_SEQ_LENGTH,ROLE = {},PREFIX = [],ADAPT = []
                                                                 pad_token_id = tokenizer.pad_token_id,
                                                                 IGNORE_TOKEN_ID = -100,
                                                                 padding=padding):
+                    if filter_null:
+                        if np.all(qa_inputs['labels']==-100):
+                            continue
+                            
                     s = sub_divide[0]
                     e = sub_divide[-2] if len(sub_divide)%2 else sub_divide[-1]
                     matched = None
@@ -436,7 +445,8 @@ def main(args):
                        compression=args.c.lower(),
                        stack=args.stack,
                        image_path=args.image_path,
-                       padding=args.pad)
+                       padding=args.pad,
+                       filter_null=args.filter)
         files =[os.path.join(tmp, i) for i in os.listdir(tmp)]
         files.sort()
         np.random.shuffle(files)
@@ -817,5 +827,6 @@ if __name__=='__main__':
     parser.add_argument('-T', action='store_true', help="thread")
     parser.add_argument('-C', action='store_true', help="clean")
     parser.add_argument('--pad', action='store_true', help="pad the token.")
+    parser.add_argument('--filter', action='store_true', help="filter the samples of all null tokens.")
     args = parser.parse_args()
     main(args)
