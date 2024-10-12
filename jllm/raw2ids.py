@@ -171,7 +171,7 @@ def token_finetune(file,tokenizer,MAX_SEQ_LENGTH,ROLE = {},PREFIX = [],ADAPT = [
                                                        IGNORE_TOKEN_ID = -100,
                                                        padding = padding):
                     if filter_null:
-                        if np.all(qa_inputs['labels']==-100):
+                        if np.sum(qa_inputs['labels']!=-100)<=1:
                             continue
                             
                     if 'category' in js:
@@ -381,7 +381,7 @@ def token_vl(file,tokenizer,MAX_SEQ_LENGTH,ROLE = {},PREFIX = [],ADAPT = []
                                                                 IGNORE_TOKEN_ID = -100,
                                                                 padding=padding):
                     if filter_null:
-                        if np.all(qa_inputs['labels']==-100):
+                        if np.sum(qa_inputs['labels']!=-100)<=1:
                             continue
                             
                     s = sub_divide[0]
