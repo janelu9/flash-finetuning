@@ -53,13 +53,13 @@ parser.add_argument("--from_ckpt",
                     type=str,
                     default= "",
                     help="ckpt dir to load pretrained model parameters")
-parser.add_argument("--no_skip",
-                    action='store_true',
-                    help="not skip the remembered epochs and partitions")
 parser.add_argument("--resume_ckpt",
                     type=str,
                     default= "",
                     help="ckpt dir to resume interruption")
+parser.add_argument("--only_load_model",
+                    action='store_true',
+                    help="only load model from checkpoint")
 parser.add_argument('--tag',
                     type=str,
                     default=None,
@@ -325,6 +325,7 @@ def main(args):
     config.lora = args.lora_dim>0
     config.lora_alpha = args.lora_alpha
     config.only_ckpt_lora = args.only_ckpt_lora
+    config.one_layerspec = not args.multi_layerspec
 
     if args.num_layers_per_decoder:
         config.split_dlayer = True
@@ -339,7 +340,14 @@ def main(args):
             config.partition_method = autopartition_decoder(config,args)
         else:
             config.partition_method = autopartition_transformer(config,args)
-    config.one_layerspec = not args.multi_layerspec
+    
+    if args.from_ckpt or args.resume_ckpt:
+        temp = args.from_ckpt or args.resume_ckpt
+        if args.tag is None:
+            with open(os.path.join(temp,'latest'),'r') as f:
+                args.tag = f.read().strip()
+        temp = os.path.join(temp,args.tag)
+        config.partition_method = AutoConfig.from_pretrained(temp,trust_remote_code=True).partition_method
     
     if isinstance(config.partition_method,str) and ',' not in config.partition_method:
         partition_method = config.partition_method
@@ -360,7 +368,7 @@ def main(args):
     topo = ProcessTopology(['data','pipe','model'], [args.data_parallel_size, args.pipe_parallel_size, args.model_parallel_size])
     args.seed = args.seed + topo.get_coord(args.global_rank).pipe
     
-    if args.model_parallel_size >1:
+    if args.model_parallel_size > 1:
         if args.device == 'npu':
             import jllm.ascend
         from jllm.core import parallel_state,tensor_parallel

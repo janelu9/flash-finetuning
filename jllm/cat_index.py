@@ -5,7 +5,7 @@ import sys
 
 if __name__=='__main__':
     output_path = sys.argv[1]
-    num_stages = len([i for i in os.listdir(output_path) if i.endswith('.json')])
+    num_stages = len([i for i in os.listdir(output_path) if i.endswith('.json') and i.startswith('0') and len(i)==10])
     file_mode = "model-{stage_id:05d}-of-"+f"{num_stages:05d}.safetensors" if num_stages>1 else "model.safetensors"
     index_json = "model.safetensors.index.json"
     index = {"metadata":{"total_size":0},"weight_map":{}}
