@@ -60,4 +60,5 @@ if __name__=='__main__':
             index["weight_map"].update(r["weight_map"])
         with open(os.path.join(args.hf ,"model.safetensors.index.json"),'w') as f:
             json.dump(index,f,indent=2)
+    os.system(f'cp -f {args.ckpt}/config.json {args.hf}/')
     print("Done!")
