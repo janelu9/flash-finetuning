@@ -32,6 +32,7 @@ import datetime
 import argparse
 import sys
 os.environ['PATH']+=":"+os.path.dirname(sys.executable)
+os.environ['TOKENIZERS_PARALLELISM']='true'
 
 parser = argparse.ArgumentParser(description='My training script.')
 parser.add_argument('--local_rank', type=int, default=-1,
@@ -249,7 +250,7 @@ parser.add_argument("--lora_alpha",
                     help="lora_alpha/lora_dim is the scaling.")
 parser.add_argument("--lora_module_name",
                     type=str,
-                    default= "self_attn,mlp",
+                    default= "qkv_proj,o_proj,gate_up_proj,down_proj",
                     help="The scope of LoRA.")
 parser.add_argument('--only_optimize_lora',
                     action='store_true',
