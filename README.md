@@ -10,6 +10,8 @@ Training Large Language Model faster, easily and low-cost.
 
 ✦ Make PCIE as fast as NVlinks under 20 billion level model.
 
+✦ Minimalist implementation of Sequence Parallelism (4D Parallelism for extra long context).
+
 ## Installation
 
 ```shell

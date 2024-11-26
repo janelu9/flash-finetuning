@@ -20,6 +20,7 @@ from .model import (
     only_optimize_lora_parameters,
     make_model_gradient_checkpointing_compatible,
     ModelPipe,
+    sequence_parallel as spu
     )
 from .trainer import train
 from .ds_config import get_train_ds_config
@@ -100,6 +101,10 @@ parser.add_argument('--model_parallel_size',
                     type=int,
                     default=1,
                     help='model parallel size')
+parser.add_argument('--sequence_parallel_size',
+                    type=int,
+                    default=1,
+                    help='sequence parallel size')
 parser.add_argument('--offload',
                     action='store_true',
                     help='Enable ZeRO Offload techniques.') 
@@ -280,6 +285,7 @@ def main(args):
     args.world_size = torch.distributed.get_world_size()
     assert args.world_size % (args.pipe_parallel_size * args.model_parallel_size) == 0
     args.data_parallel_size = args.world_size // (args.pipe_parallel_size * args.model_parallel_size)
+    assert args.data_parallel_size%args.sequence_parallel_size==0
 
     ds_config = get_train_ds_config(
         offload=args.offload,
@@ -287,7 +293,7 @@ def main(args):
     ds_config[
         'train_micro_batch_size_per_gpu'] = args.per_device_train_batch_size
     ds_config[
-        'train_batch_size'] = args.per_device_train_batch_size*args.gradient_accumulation_steps*args.data_parallel_size
+        'train_batch_size'] = args.per_device_train_batch_size*args.gradient_accumulation_steps*args.data_parallel_size//args.sequence_parallel_size
     ds_config['steps_per_print'] = args.steps_per_print
     set_random_seed(args.seed)
     if args.checkpoint and not os.path.exists(args.checkpoint) and args.global_rank ==0: 
@@ -322,7 +328,7 @@ def main(args):
     config.split_dlayer = args.split_dlayer
     config.device = args.device
     config.encoder_pipe_parallel_size = args.encoder_pipe_parallel_size
-    config.seq_len = args.seq_len
+    config.seq_len = (args.seq_len-1+args.sequence_parallel_size-1)//args.sequence_parallel_size+1
     config.lora = args.lora_dim>0
     config.lora_alpha = args.lora_alpha
     config.only_ckpt_lora = args.only_ckpt_lora
@@ -331,10 +337,11 @@ def main(args):
     if args.num_layers_per_decoder:
         config.split_dlayer = True
         config.num_layers_per_decoder=args.num_layers_per_decoder
-        config.num_hidden_layers=config.num_hidden_layers*args.num_layers_per_decoder//2
-        config.partition_method = autopartition_transformer(config,args)
-        config.num_hidden_layers=config.num_hidden_layers//args.num_layers_per_decoder*2
-    else:
+        if not hasattr(config,'partition_method') or len(config.partition_method)!=args.pipe_parallel_size+1:
+            config.num_hidden_layers=config.num_hidden_layers*args.num_layers_per_decoder//2
+            config.partition_method = autopartition_transformer(config,args)
+            config.num_hidden_layers=config.num_hidden_layers//args.num_layers_per_decoder*2
+    elif not hasattr(config,'partition_method') or len(config.partition_method)!=args.pipe_parallel_size+1:
         if hasattr(config,'llm_config'):
             config.partition_method = autopartition_decoder(config.llm_config,args)
         elif hasattr(config,'vision_config') and not hasattr(config,'llm_config'):
@@ -368,6 +375,8 @@ def main(args):
     
     topo = ProcessTopology(['data','pipe','model'], [args.data_parallel_size, args.pipe_parallel_size, args.model_parallel_size])
     args.seed = args.seed + topo.get_coord(args.global_rank).pipe
+    
+    spu.initialize_sequence_parallel(args.data_parallel_size, args.pipe_parallel_size, args.model_parallel_size,args.sequence_parallel_size)
     
     if args.model_parallel_size > 1:
         if args.device == 'npu':
@@ -444,7 +453,7 @@ def main(args):
     That may cause "num_update_steps_per_epoch" to be un-precision. But it donesn't matter.
     ''' 
     num_train_batch =sum(
-        int(open(os.path.join(args.train_data,f)).read().split()[0])//args.per_device_train_batch_size//args.data_parallel_size
+        int(open(os.path.join(args.train_data,f)).read().split()[0])//args.per_device_train_batch_size//(args.data_parallel_size//args.sequence_parallel_size)
         for f in os.listdir(args.train_data) if f[-4:] == '.crc') 
     num_update_steps_per_epoch = num_train_batch // args.gradient_accumulation_steps + len(train_data_partitions) - 1
     args.num_training_steps = int(args.num_train_epochs * num_update_steps_per_epoch)
