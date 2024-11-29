@@ -28,9 +28,9 @@ Convert the raw data to token ids stored in parquet files.
 
 ```shell
 python -m jllm.raw2ids \
-    --tokenizer Qwen1.5-14B-Chat \
+    --tokenizer Qwen2.5-7B-Instruct \
     -i dataset0.jsonl \
-    -o dataset0_Qwen1.5-14B-Chat
+    -o dataset0_Qwen2.5-7B-Instruct
 ```
 
 ***Note**: Samples of pre-train dataset should be separated by `'\n\n'` in text files or be the value of  key`'text'` in jsonl files. Fine-tune dataset's format should be `[{'system':content},{'user':content},{'assistant':content},...] ` in each row of jsonl files, key`'system'` is not necessary.*
@@ -57,14 +57,14 @@ Firstly, move all the datasets stored in parquet folders into one directory. suc
 
 ```shell
 datasets
-├── dataset0_Qwen1.5-14B-Chat
+├── dataset0_Qwen2.5-7B-Instruct
 │   ├── dataset0-00000
 │   │   ├── dataset0-00000-00000.gzip.parquet
 │   │   └── dataset0-00000-00001.gzip.parquet
 │   └── dataset0-00001
 │       ├── dataset0-00001-00000.gzip.parquet
 │       └── dataset0-00001-00001.gzip.parquet
-└── dataset1_Qwen1.5-14B-Chat
+└── dataset1_Qwen2.5-7B-Instruct
     ├── dataset1-00000
     │   ├── dataset1-00000-00000.gzip.parquet
     │   └── dataset1-00000-00001.gzip.parquet
@@ -83,16 +83,16 @@ Every dataset would be shuffled and placed in `shuffled_datasets` with several t
 
 ```shell
 shuffled_datasets/
-├── dataset0_Qwen1.5-14B-Chat-00000
-│   ├── dataset0_Qwen1.5-14B-Chat-00000-00000.gzip.parquet
-│   ├── dataset0_Qwen1.5-14B-Chat-00000-00001.gzip.parquet
-│   ├── dataset0_Qwen1.5-14B-Chat-00000-00002.gzip.parquet
-│   └── dataset0_Qwen1.5-14B-Chat-00000-00003.gzip.parquet
-└── dataset1_Qwen1.5-14B-Chat-00000
-    ├── dataset1_Qwen1.5-14B-Chat-00000-00000.gzip.parquet
-    ├── dataset1_Qwen1.5-14B-Chat-00000-00001.gzip.parquet
-    ├── dataset1_Qwen1.5-14B-Chat-00000-00002.gzip.parquet
-    └── dataset1_Qwen1.5-14B-Chat-00000-00003.gzip.parquet
+├── dataset0_Qwen2.5-7B-Instruct-00000
+│   ├── dataset0_Qwen2.5-7B-Instruct-00000-00000.gzip.parquet
+│   ├── dataset0_Qwen2.5-7B-Instruct-00000-00001.gzip.parquet
+│   ├── dataset0_Qwen2.5-7B-Instruct-00000-00002.gzip.parquet
+│   └── dataset0_Qwen2.5-7B-Instruct-00000-00003.gzip.parquet
+└── dataset1_Qwen2.5-7B-Instruct-00000
+    ├── dataset1_Qwen2.5-7B-Instruct-00000-00000.gzip.parquet
+    ├── dataset1_Qwen2.5-7B-Instruct-00000-00001.gzip.parquet
+    ├── dataset1_Qwen2.5-7B-Instruct-00000-00002.gzip.parquet
+    └── dataset1_Qwen2.5-7B-Instruct-00000-00003.gzip.parquet
 ```
 
 ### Repartition (For Pretrain)
@@ -108,17 +108,17 @@ The datasets will be:
 ```shell
 shuffled_datasets/
 ├── 5984729befe338e6a7-part-00000
-│   ├── dataset0_Qwen1.5-14B-Chat-00000-00000.gzip.parquet
-│   └── dataset1_Qwen1.5-14B-Chat-00000-00000.gzip.parquet
+│   ├── dataset0_Qwen2.5-7B-Instruct-00000-00000.gzip.parquet
+│   └── dataset1_Qwen2.5-7B-Instruct-00000-00000.gzip.parquet
 ├── 5984729befe338e6a7-part-00001
-│   ├── dataset0_Qwen1.5-14B-Chat-00000-00001.gzip.parquet
-│   └── dataset1_Qwen1.5-14B-Chat-00000-00001.gzip.parquet
+│   ├── dataset0_Qwen2.5-7B-Instruct-00000-00001.gzip.parquet
+│   └── dataset1_Qwen2.5-7B-Instruct-00000-00001.gzip.parquet
 ├── 5984729befe338e6a7-part-00002
-│   ├── dataset0_Qwen1.5-14B-Chat-00000-00002.gzip.parquet
-│   └── dataset1_Qwen1.5-14B-Chat-00000-00002.gzip.parquet
+│   ├── dataset0_Qwen2.5-7B-Instruct-00000-00002.gzip.parquet
+│   └── dataset1_Qwen2.5-7B-Instruct-00000-00002.gzip.parquet
 ├── 5984729befe338e6a7-part-00003
-│   ├── dataset0_Qwen1.5-14B-Chat-00000-00003.gzip.parquet
-│   └── dataset1_Qwen1.5-14B-Chat-00000-00003.gzip.parquet
+│   ├── dataset0_Qwen2.5-7B-Instruct-00000-00003.gzip.parquet
+│   └── dataset1_Qwen2.5-7B-Instruct-00000-00003.gzip.parquet
 └── data.info
 ```
 
@@ -126,21 +126,45 @@ shuffled_datasets/
 
 ## Model Training
 
+#### Large Language Model (4D Parallelism):
+
+```shell
+deepspeed --module jllm.train_pipe \
+    --model Qwen2.5-7B-Instruct \
+    --num_train_epochs 3 \
+    --train_data dataset0_Qwen2.5-7B-Instruct \
+    --pipe_parallel_size 2 \
+    --model_parallel_size 2 \
+    --sequence_parallel_size 2 \
+    --per_device_train_batch_size 1 \
+    --gradient_accumulation_steps 32 \
+    --partition_method fast \
+    --split_dlayer \
+    --only_ckpt_model \
+    --max_num_checkpoints 2 \
+    --split_dlayer \
+    --learning_rate 1e-5 \
+    --checkpoint checkpoint
+```
+
+#### **Vision Language Model**:
+
 ```shell
 deepspeed -H $HOSTFILE \
     --module jllm.train_pipe \
     --model Qwen2-VL-7B-Instruct \
+    --num_train_epochs 3 \
     --train_data dataset_vl_Qwen2-VL-7B-Instruct \
     --pipe_parallel_size 8 \
     --encoder_pipe_parallel_size 2 \
     --per_device_train_batch_size 1 \
     --gradient_accumulation_steps 32 \
     --only_ckpt_model \
-    --checkpoint checkpoint \
     --max_num_checkpoints 2 \
     --partition_method 11,2 \
     --split_dlayer \
-    --checkpoint_grad_interval 1
+    --checkpoint_grad_interval 1 \
+    --checkpoint checkpoint
 ```
 
 ***Note**: Arguments `train_data` and `eval_data` also support `jsonl` file. Run `python -m jllm.train_pipe -h ` for more arguments.* 
@@ -199,7 +223,7 @@ vLLm is quoted here for Inference.
 
 ```shell
 python batch_infer.py \
-    --model Qwen1.5-14B-Chat-Finetune \
+    --model Qwen2.5-7B-Instruct-Finetune \
     --prompt_file prompt.txt
 ```
 
@@ -208,7 +232,7 @@ python batch_infer.py \
 Start the server:
 
 ```shell
-python server.py --model Qwen1.5-14B-Chat-Finetune
+python server.py --model Qwen2.5-7B-Instruct-Finetune
 ```
 
 Query the model :

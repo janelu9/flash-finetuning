@@ -49,6 +49,7 @@ def get_train_ds_config(offload,
     return {
         "train_batch_size": GLOBAL_BATCH_SIZE,
         "train_micro_batch_size_per_gpu": MICRO_BATCH_SIZE,
+        "seed":1234,
         "steps_per_print": 1,
         "zero_allow_untested_optimizer": True,
         "zero_optimization": zero_opt_dict,
