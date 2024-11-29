@@ -142,7 +142,6 @@ deepspeed --module jllm.train_pipe \
     --split_dlayer \
     --only_ckpt_model \
     --max_num_checkpoints 2 \
-    --split_dlayer \
     --learning_rate 1e-5 \
     --checkpoint checkpoint
 ```
