@@ -15,6 +15,7 @@ import tqdm
 import os
 import gc
 
+os.environ['TOKENIZERS_PARALLELISM']='true'
 IGNORE_TOKEN_ID: int = -100
 OVERLAPPING_LENGTH: int  = 1
 SPLIT_LENGTH: int = 131072
@@ -819,7 +820,7 @@ if __name__=='__main__':
     parser.add_argument('--max_len', type=int, default=2**11)
     parser.add_argument('--cores', type=int, default=-1)
     parser.add_argument('--max_num', type=int, default=1)
-    parser.add_argument('--max_pixels', type=int, default=1920*1080)
+    parser.add_argument('--max_pixels', type=int, default=2560*1440)
     parser.add_argument('--tokenizer', type=str, default="openlm-research/open_llama_13b")
     parser.add_argument('--image_path', type=str, default="")
     parser.add_argument('--tmp', type=str, default="tmp")
