@@ -162,6 +162,10 @@ parser.add_argument('--steps_per_print',
                     type=int,
                     default=1,
                     help='steps per print')
+parser.add_argument('--num_workers',
+                    type=int,
+                    default=None,
+                    help='dataloader\'s num_workers')
 parser.add_argument('--steps_per_eval',
                     type=int,
                     default=-1,
