@@ -475,7 +475,8 @@ def main(args):
         optimizer=optimizer if "optimizer" not in ds_config else None,
         lr_scheduler=lr_scheduler if "scheduler" not in ds_config else None,
         )
-      
+    engine.set_train_batch_size(engine.train_batch_size()*args.sequence_parallel_size)
+    
     train(args,engine,train_data_partitions,eval_data_partitions if args.eval_data else None)
 
 from deepspeed.runtime.pipe.module import PipelineModule,logger,ds_utils,LayerSpec,nn
