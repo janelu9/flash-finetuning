@@ -26,6 +26,7 @@ from .trainer import train
 from .ds_config import get_train_ds_config
 from deepspeed.ops.adam import DeepSpeedCPUAdam, FusedAdam
 from deepspeed.runtime.pipe import ProcessTopology
+from functools import partial
 import numpy as np
 import os
 import importlib
@@ -466,7 +467,7 @@ def main(args):
             name=args.lr_scheduler_type,
             optimizer=optimizer,
             num_warmup_steps=args.num_warmup_steps if args.num_warmup_steps >= 1 else int(args.num_warmup_steps * num_update_steps_per_epoch),
-            num_training_steps=args.num_training_steps)      
+            num_training_steps=args.num_training_steps)
     
     engine, *_ = deepspeed.initialize(
         args=args,
@@ -480,7 +481,6 @@ def main(args):
     train(args,engine,train_data_partitions,eval_data_partitions if args.eval_data else None)
 
 from deepspeed.runtime.pipe.module import PipelineModule,logger,ds_utils,LayerSpec,nn
-
 def custom_partition_layers(self, method='uniform'):
     num_stages = self._topo.get_dim('pipe')
     stage_id = self._topo.get_coord(self.global_rank).pipe
@@ -537,7 +537,6 @@ def custom_partition_layers(self, method='uniform'):
                 print(f'  loss: {self.loss_fn.__class__.__name__}')
 
     self._set_bounds(start=self.parts[stage_id], stop=self.parts[stage_id + 1])
-    
 PipelineModule._partition_layers = custom_partition_layers
 
 if __name__ == "__main__":
