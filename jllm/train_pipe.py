@@ -106,6 +106,10 @@ parser.add_argument('--sequence_parallel_size',
                     type=int,
                     default=1,
                     help='sequence parallel size')
+parser.add_argument('--attention_alpha',
+                    type=int,
+                    default=3,
+                    help='coefficient to estimate attention\'s computation.')
 parser.add_argument('--offload',
                     action='store_true',
                     help='Enable ZeRO Offload techniques.') 
@@ -301,8 +305,8 @@ def main(args):
         'train_batch_size'] = args.per_device_train_batch_size*args.gradient_accumulation_steps*args.data_parallel_size//args.sequence_parallel_size
     ds_config['steps_per_print'] = args.steps_per_print
     set_random_seed(args.seed)
-    if args.checkpoint and not os.path.exists(args.checkpoint) and args.global_rank ==0: 
-        os.system(f"mkdir -p {args.checkpoint}")
+    if args.checkpoint: 
+        os.makedirs(output_path,exist_ok=True)
     if os.path.isfile(args.train_data):
         cached_dir = os.path.join(os.path.dirname(args.train_data),os.path.splitext(os.path.basename(args.train_data))[0] + f"_{os.path.basename(args.model)}")
         if args.global_rank ==0:
@@ -311,7 +315,8 @@ def main(args):
         torch.distributed.barrier()
         args.train_data = cached_dir
     train_data_partitions = sorted([os.path.join(args.train_data,f) for f in os.listdir(args.train_data) if os.path.isdir(os.path.join(args.train_data,f))])
-    args.seq_len = int(open(os.path.join(args.train_data,[f for f in os.listdir(args.train_data) if f[-4:] == '.crc'][0])).read().split()[1])
+    data_info = open(os.path.join(args.train_data,[f for f in os.listdir(args.train_data) if f[-4:] == '.crc'][0])).read().split()
+    args.seq_len, num_field= int(data_info[1]),int(data_info[-1])
     if args.eval_data:
         if os.path.isfile(args.eval_data):
             cached_dir = os.path.join(os.path.dirname(args.eval_data),os.path.splitext(os.path.basename(args.eval_data))[0] + f"_{os.path.basename(args.model)}")
@@ -321,6 +326,8 @@ def main(args):
             torch.distributed.barrier()
             args.eval_data = cached_dir
         eval_data_partitions = sorted([os.path.join(args.eval_data,f) for f in os.listdir(args.eval_data) if os.path.isdir(os.path.join(args.eval_data,f))])
+    
+    spu.initialize_sequence_parallel(args.data_parallel_size, args.pipe_parallel_size, args.model_parallel_size,args.sequence_parallel_size)
     
     try:
         config = AutoConfig.from_pretrained(args.model,trust_remote_code=True)
@@ -333,11 +340,23 @@ def main(args):
     config.split_dlayer = args.split_dlayer
     config.device = args.device
     config.encoder_pipe_parallel_size = args.encoder_pipe_parallel_size
-    config.seq_len = (args.seq_len-1+args.sequence_parallel_size-1)//args.sequence_parallel_size+1
     config.lora = args.lora_dim>0
     config.lora_alpha = args.lora_alpha
     config.only_ckpt_lora = args.only_ckpt_lora
     config.one_layerspec = not args.multi_layerspec
+    if args.sequence_parallel_size>1: # adaptive sequence length for computation balancing
+        from jllm.data.utils import get_interp_fuc
+        spu.seqlens = get_interp_fuc(args.sequence_parallel_size,
+                                     config.hidden_size,
+                                     config.hidden_size*config.num_key_value_heads//config.num_attention_heads,
+                                     args.seq_len-1,
+                                     config.intermediate_size,
+                                     attention_alpha = args.attention_alpha-int(args.model_parallel_size>1),
+                                     dynamic=num_field>1)
+        config.seq_len = spu.seqlens[spu.get_sequence_parallel_rank()+1](args.seq_len-1)-spu.seqlens[spu.get_sequence_parallel_rank()](args.seq_len-1)
+    else:
+        spu.seqlens = None
+        config.seq_len = args.seq_len-1 # (args.seq_len-1+args.sequence_parallel_size-1)//args.sequence_parallel_size+1
 
     if args.num_layers_per_decoder:
         config.split_dlayer = True
@@ -381,8 +400,6 @@ def main(args):
     topo = ProcessTopology(['data','pipe','model'], [args.data_parallel_size, args.pipe_parallel_size, args.model_parallel_size])
     args.seed = args.seed + topo.get_coord(args.global_rank).pipe
     
-    spu.initialize_sequence_parallel(args.data_parallel_size, args.pipe_parallel_size, args.model_parallel_size,args.sequence_parallel_size)
-    
     if args.model_parallel_size > 1:
         if args.device == 'npu':
             import jllm.ascend
@@ -396,7 +413,7 @@ def main(args):
                                               pipeline_dtype=config.torch_dtype
                                              )
         parallel_config.batch_size = args.per_device_train_batch_size
-        parallel_config.seq_length = args.seq_len
+        parallel_config.seq_length = config.seq_len
         parallel_config.low_mem = args.low_mem
         from jllm.model import ModelParallel
         with deepspeed.zero.Init(data_parallel_group=parallel_state.get_data_parallel_group(),
