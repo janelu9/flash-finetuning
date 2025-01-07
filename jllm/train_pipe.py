@@ -107,7 +107,7 @@ parser.add_argument('--sequence_parallel_size',
                     default=1,
                     help='sequence parallel size')
 parser.add_argument('--attention_alpha',
-                    type=int,
+                    type=float,
                     default=3,
                     help='coefficient to estimate attention\'s computation.')
 parser.add_argument('--offload',
@@ -351,7 +351,7 @@ def main(args):
                                      config.hidden_size*config.num_key_value_heads//config.num_attention_heads,
                                      args.seq_len-1,
                                      config.intermediate_size,
-                                     attention_alpha = args.attention_alpha//(1+int(args.model_parallel_size>1)),
+                                     attention_alpha = args.attention_alpha-int(args.model_parallel_size>1),
                                      dynamic=num_field>1)
         config.seq_len = spu.seqlens[spu.get_sequence_parallel_rank()+1](args.seq_len-1)-spu.seqlens[spu.get_sequence_parallel_rank()](args.seq_len-1)
     else:
