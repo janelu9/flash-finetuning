@@ -526,6 +526,10 @@ def llama3_template(tokenizer,**kwargs):
     }
     
     ADAPT = [tokenizer.bos_token_id,start_header_id[0]]
+    
+    if 'Cutting Knowledge Date: December 2023' in tokenizer.chat_template and '26 Jul 2024' in tokenizer.chat_template:
+        PREFIX = [{'system':'Cutting Knowledge Date: December 2023\nToday Date: 26 Jul 2024\n\n'}]
+        
     return tokenizer,ROLE,PREFIX,ADAPT
     
 def qwen_template(tokenizer,**kwargs): 

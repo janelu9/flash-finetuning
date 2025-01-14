@@ -306,7 +306,7 @@ def main(args):
     ds_config['steps_per_print'] = args.steps_per_print
     set_random_seed(args.seed)
     if args.checkpoint: 
-        os.makedirs(output_path,exist_ok=True)
+        os.makedirs(args.checkpoint,exist_ok=True)
     if os.path.isfile(args.train_data):
         cached_dir = os.path.join(os.path.dirname(args.train_data),os.path.splitext(os.path.basename(args.train_data))[0] + f"_{os.path.basename(args.model)}")
         if args.global_rank ==0:
