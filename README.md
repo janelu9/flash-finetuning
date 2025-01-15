@@ -42,7 +42,7 @@ python -m jllm.raw2ids \
     --tokenizer Qwen2-VL-7B-Instruct \
     -i dataset_vl.jsonl \
     --image_path images \
-    --max_len 8192 \
+    --max_len 8193 \
 ```
 
 Folder `images` stores all the images data.  Format of  `dataset_vl.jsonl` is like:
@@ -137,7 +137,7 @@ deepspeed --module jllm.train_pipe \
     --model_parallel_size 2 \
     --sequence_parallel_size 2 \
     --per_device_train_batch_size 1 \
-    --gradient_accumulation_steps 32 \
+    --global_batch_size 32 \
     --partition_method fast \
     --split_dlayer \
     --only_ckpt_model \
@@ -157,7 +157,7 @@ deepspeed -H $HOSTFILE \
     --pipe_parallel_size 8 \
     --encoder_pipe_parallel_size 2 \
     --per_device_train_batch_size 1 \
-    --gradient_accumulation_steps 32 \
+    --global_batch_size 32 \
     --only_ckpt_model \
     --max_num_checkpoints 2 \
     --partition_method 11,2 \

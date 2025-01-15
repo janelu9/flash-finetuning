@@ -128,10 +128,10 @@ parser.add_argument('--per_device_train_batch_size',
                     type=int,
                     default=1,
                     help='per device train batch_size')
-parser.add_argument('--gradient_accumulation_steps',
+parser.add_argument('--global_batch_size',
                     type=int,
                     default=1,
-                    help='gradient accumulation steps')
+                    help='global batch size')
 parser.add_argument("--weight_decay",
                     type=float,
                     default=0.,
@@ -295,6 +295,7 @@ def main(args):
     assert args.world_size % (args.pipe_parallel_size * args.model_parallel_size) == 0
     args.data_parallel_size = args.world_size // (args.pipe_parallel_size * args.model_parallel_size)
     assert args.data_parallel_size%args.sequence_parallel_size==0
+    args.gradient_accumulation_steps = args.global_batch_size//args.per_device_train_batch_size//args.data_parallel_size
 
     ds_config = get_train_ds_config(
         offload=args.offload,
@@ -302,7 +303,7 @@ def main(args):
     ds_config[
         'train_micro_batch_size_per_gpu'] = args.per_device_train_batch_size
     ds_config[
-        'train_batch_size'] = args.per_device_train_batch_size*args.gradient_accumulation_steps*args.data_parallel_size//args.sequence_parallel_size
+        'train_batch_size'] = args.global_batch_size//args.sequence_parallel_size
     ds_config['steps_per_print'] = args.steps_per_print
     set_random_seed(args.seed)
     if args.checkpoint: 
