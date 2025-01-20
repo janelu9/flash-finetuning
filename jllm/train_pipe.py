@@ -132,6 +132,10 @@ parser.add_argument('--global_batch_size',
                     type=int,
                     default=1,
                     help='global batch size')
+parser.add_argument('--gradient_accumulation_steps',
+                    type=int,
+                    default=0,
+                    help='gradient accumulation steps')
 parser.add_argument("--weight_decay",
                     type=float,
                     default=0.,
@@ -295,7 +299,10 @@ def main(args):
     assert args.world_size % (args.pipe_parallel_size * args.model_parallel_size) == 0
     args.data_parallel_size = args.world_size // (args.pipe_parallel_size * args.model_parallel_size)
     assert args.data_parallel_size%args.sequence_parallel_size==0
-    args.gradient_accumulation_steps = args.global_batch_size//args.per_device_train_batch_size//args.data_parallel_size
+    if args.gradient_accumulation_steps==0:
+        args.gradient_accumulation_steps = args.global_batch_size//args.per_device_train_batch_size//args.data_parallel_size
+    else:
+        args.global_batch_size = args.per_device_train_batch_size*args.data_parallel_size*args.gradient_accumulation_steps
 
     ds_config = get_train_ds_config(
         offload=args.offload,
