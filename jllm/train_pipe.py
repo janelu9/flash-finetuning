@@ -52,6 +52,10 @@ parser.add_argument("--eval_data",
                     type=str,
                     default= "",
                     help="data for evalution,jsonl or parqet folder")
+parser.add_argument("--img_shm",
+                    type=str,
+                    default= None,
+                    help="image files' shm dir if reading during traing")
 parser.add_argument("--from_ckpt",
                     type=str,
                     default= "",
