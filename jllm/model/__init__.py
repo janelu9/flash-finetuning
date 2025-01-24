@@ -7,6 +7,7 @@ from .llama.parallel_llama import LlamaForCausalLMPipe as LlamaForCausalLMParall
 from .qwen2.parallel_qwen2 import Qwen2ForCausalLMPipe as Qwen2ForCausalLMParallel
 from .qwen2.pipeline_qwen2_moe import Qwen2MoeForCausalLMPipe
 from .qwen2_vl.pipeline_qwen2_vl import Qwen2VLForCausalLMPipe
+from .qwen2_vl.parallel_qwen2_vl import Qwen2VLForCausalLMParallel
 from .intern.pipeline_internvl2 import InterenVL2ForCausalLMPipe,autopartition_decoder
 from .intern.pipeline_internlm2 import InternLM2ForCausalLMPipe
 
@@ -24,5 +25,7 @@ ModelPipe = {
     
 ModelParallel = {
     'LlamaForCausalLM':LlamaForCausalLMParallel,
-    'Qwen2ForCausalLM':Qwen2ForCausalLMParallel
+    'Qwen2ForCausalLM':Qwen2ForCausalLMParallel,
+    'Qwen2VLForConditionalGeneration':Qwen2VLForCausalLMParallel
 }
+
