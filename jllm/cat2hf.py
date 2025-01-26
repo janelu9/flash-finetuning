@@ -36,10 +36,10 @@ if __name__=='__main__':
         model_file =f"model-{pipe_rank:05d}-of-"+f"{num_stages:05d}.safetensors"
         
         for k in tqdm.tqdm(keys):
-            if  "o_proj" in k or "down_proj" in k in k:
+            if  "o_proj" in k or "down_proj" in k or 'attn.proj.weight' in k or 'mlp.fc2.weight' in k or 'mlp.2.weight' in k :
                 state_dict[k] = torch.cat([p[1].pop(k) for p in pts],1)
-            elif "lm_head" in k or "gate_proj" in k or "up_proj" in k or "embed_tokens" in k\
-            or "q_proj" in k or "k_proj" in k or "v_proj" in k:
+            elif "lm_head" in k or "gate_proj" in k or "up_proj" in k or "embed_tokens" in k or "q_proj" in k \
+            or "k_proj" in k or "v_proj" in k or 'attn.qkv' in k or 'mlp.fc1' in k or 'mlp.0' in k:
                 state_dict[k] = torch.cat([p[1].pop(k) for p in pts])
             else:
                 state_dict[k] = pts[0][1].pop(k)
