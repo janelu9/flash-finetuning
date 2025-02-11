@@ -194,6 +194,14 @@ deepspeed -H $HOSTFILE \
     --output_dir output_path
 ```
 
+To concatenate the weights when ` model_parallel_size>1`:
+
+```shell
+python -m jllm.cat2hf \
+       -C checkpoint_model \
+       -H huggingface_model
+```
+
 #### Supported Models
 
 |    Model     | Training Speed (tokens/s) |
