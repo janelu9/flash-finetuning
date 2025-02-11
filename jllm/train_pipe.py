@@ -27,6 +27,7 @@ from .ds_config import get_train_ds_config
 from deepspeed.ops.adam import DeepSpeedCPUAdam, FusedAdam
 from deepspeed.runtime.pipe import ProcessTopology
 from functools import partial
+import pyarrow.parquet
 import numpy as np
 import os
 import importlib
@@ -237,9 +238,6 @@ parser.add_argument('--no_checkpoint_grad_step',
                     type=int,
                     default=1000000,
                     help='no checkpoint grad step')
-parser.add_argument('--low_mem',
-                    action='store_true',
-                    help='lower memory usage.')
 parser.add_argument('--no_shuf',
                     action='store_true',
                     help='disable shuffle at every epoch.')
@@ -329,6 +327,15 @@ def main(args):
     train_data_partitions = sorted([os.path.join(args.train_data,f) for f in os.listdir(args.train_data) if os.path.isdir(os.path.join(args.train_data,f))])
     data_info = open(os.path.join(args.train_data,[f for f in os.listdir(args.train_data) if f[-4:] == '.crc'][0])).read().split()
     args.seq_len, num_field= int(data_info[1]),int(data_info[-1])
+    
+    args.max_num_patches = 0
+    args.max_num_images = 0
+    if os.path.exists(os.path.join(args.train_data,'image.info')):
+        image_info = pyarrow.parquet.read_table(os.path.join(args.train_data,'image.info'))
+        ratios = image_info['rat'].to_numpy().tolist()
+        args.max_num_patches = ratios[-1][3]
+        args.max_num_images = ratios[-1][4]
+        
     if args.eval_data:
         if os.path.isfile(args.eval_data):
             cached_dir = os.path.join(os.path.dirname(args.eval_data),os.path.splitext(os.path.basename(args.eval_data))[0] + f"_{os.path.basename(args.model)}")
@@ -412,7 +419,7 @@ def main(args):
     topo = ProcessTopology(['data','pipe','model'], [args.data_parallel_size, args.pipe_parallel_size, args.model_parallel_size])
     args.seed = args.seed + topo.get_coord(args.global_rank).pipe
     
-    if args.model_parallel_size > 1:
+    if args.model_parallel_size >1:
         if args.device == 'npu':
             import jllm.ascend
         from jllm.core import parallel_state,tensor_parallel
@@ -426,7 +433,9 @@ def main(args):
                                              )
         parallel_config.batch_size = args.per_device_train_batch_size
         parallel_config.seq_length = config.seq_len
-        parallel_config.low_mem = args.low_mem
+        parallel_config.low_mem = True
+        parallel_config.max_num_images = args.max_num_images
+        parallel_config.max_num_patches = args.max_num_patches
         from jllm.model import ModelParallel
         with deepspeed.zero.Init(data_parallel_group=parallel_state.get_data_parallel_group(),
                          config_dict_or_path=ds_config,
