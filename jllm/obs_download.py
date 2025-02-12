@@ -4,6 +4,7 @@ import argparse
 import moxing as mox
 from functools import partial
 from concurrent.futures import ProcessPoolExecutor
+
 # import torch
 # import torch_npu
 # from datetime import timedelta
@@ -40,8 +41,15 @@ def obs_download(rank,world_size,pp,tp,model,data):
         if mox.file.exists(file_path):
             mox.file.copy(file_path,os.path.join('/cache','model',file))
     
-    if data is not None and pr==0 and tr ==0 and mox.file.exists(data):
-        mox.file.copy(data,'/cache/data')
+    if data is not None and mox.file.exists(data):
+        if pr==0 and tr ==0:
+            mox.file.copy_parallel(data,'/cache/data')
+        elif rank%8==0:
+            for file in mox.file.list_directory(data, recursive=False):
+                if file[-4:]=='.crc':
+                    mox.file.copy(os.path.join(data,file),os.path.join('/cache/data',file))
+                else:
+                    os.makedirs(os.path.join('/cache/data',file),exist_ok=True)
 
 if __name__=='__main__':
     parser = argparse.ArgumentParser()
@@ -49,7 +57,6 @@ if __name__=='__main__':
     parser.add_argument('--tp', type=int,default=1,help='tp size' )
     parser.add_argument('--data', type=str,help='train data obs path')
     parser.add_argument('--model', type=str,help='model obs path')
-    parser.add_argument('--timeout', type=int, default=30, help='timeout')
     args = parser.parse_args()
     
     # init_process_group_kwargs = {
