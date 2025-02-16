@@ -241,6 +241,9 @@ parser.add_argument('--no_checkpoint_grad_step',
 parser.add_argument('--no_shuf',
                     action='store_true',
                     help='disable shuffle at every epoch.')
+parser.add_argument('--dist_data',
+                    action='store_true',
+                    help='distribute data on every node.')
 parser.add_argument('--no_safetensor',
                     action='store_true',
                     help='not use safetensor.')

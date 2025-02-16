@@ -8,6 +8,8 @@ from .qwen2.parallel_qwen2 import Qwen2ForCausalLMPipe as Qwen2ForCausalLMParall
 from .qwen2.pipeline_qwen2_moe import Qwen2MoeForCausalLMPipe
 from .qwen2_vl.pipeline_qwen2_vl import Qwen2VLForCausalLMPipe
 from .qwen2_vl.parallel_qwen2_vl import Qwen2VLForCausalLMParallel
+from .qwen2_5_vl.pipeline_qwen2_5_vl import Qwen2_5_VLForCausalLMPipe
+from .qwen2_5_vl.parallel_qwen2_5_vl import Qwen2_5_VLForCausalLMParallel
 from .intern.pipeline_internvl2 import InterenVL2ForCausalLMPipe,autopartition_decoder
 from .intern.pipeline_internlm2 import InternLM2ForCausalLMPipe
 
@@ -20,12 +22,14 @@ ModelPipe = {
     'Qwen2MoeForCausalLM':Qwen2MoeForCausalLMPipe,
     'InternVLChatModel':InterenVL2ForCausalLMPipe,
     'InternLM2ForCausalLM':InternLM2ForCausalLMPipe,
-    'Qwen2VLForConditionalGeneration':Qwen2VLForCausalLMPipe
+    'Qwen2VLForConditionalGeneration':Qwen2VLForCausalLMPipe,
+    'Qwen2_5_VLForConditionalGeneration':Qwen2_5_VLForCausalLMPipe
 }
     
 ModelParallel = {
     'LlamaForCausalLM':LlamaForCausalLMParallel,
     'Qwen2ForCausalLM':Qwen2ForCausalLMParallel,
-    'Qwen2VLForConditionalGeneration':Qwen2VLForCausalLMParallel
+    'Qwen2VLForConditionalGeneration':Qwen2VLForCausalLMParallel,
+    'Qwen2_5_VLForConditionalGeneration':Qwen2_5_VLForCausalLMParallel,
 }
 

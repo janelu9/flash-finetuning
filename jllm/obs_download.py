@@ -4,7 +4,7 @@ import argparse
 import moxing as mox
 from functools import partial
 from concurrent.futures import ProcessPoolExecutor
-
+import time
 # import torch
 # import torch_npu
 # from datetime import timedelta
@@ -50,6 +50,7 @@ def obs_download(rank,world_size,pp,tp,model,data):
                     mox.file.copy(os.path.join(data,file),os.path.join('/cache/data',file))
                 else:
                     os.makedirs(os.path.join('/cache/data',file),exist_ok=True)
+    
 
 if __name__=='__main__':
     parser = argparse.ArgumentParser()
@@ -57,6 +58,7 @@ if __name__=='__main__':
     parser.add_argument('--tp', type=int,default=1,help='tp size' )
     parser.add_argument('--data', type=str,help='train data obs path')
     parser.add_argument('--model', type=str,help='model obs path')
+    parser.add_argument('--sleep', type=int,default=30,help='sleep seconds')
     args = parser.parse_args()
     
     # init_process_group_kwargs = {
@@ -71,7 +73,7 @@ if __name__=='__main__':
     # rank = torch.distributed.get_rank()
     
     #obs_download(rank,world_size,args.pp,args.tp,args.model,args.data)
-    
+    print("下载开始时间:", time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()))
     with ProcessPoolExecutor(max_workers=8) as exe:
         func = partial(obs_download,
                        world_size=int(os.environ["WORLD_SIZE"]),
@@ -81,5 +83,13 @@ if __name__=='__main__':
                        data=args.data)
         NODE_RANK = int(os.environ["NODE_RANK"])*8
         list(exe.map(func,range(NODE_RANK,NODE_RANK+8)))
+        
+    sync_file='/'.join(args.model.rsplit(os.path.sep)[:3]+['sync',f'{int(os.environ["NODE_RANK"]):04}.txt'])
+    with mox.file.File(sync_file, 'w') as f:
+        f.write('done')
+    print("下载完成时间:", time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()))
+    time.sleep(1)
+    while len(mox.file.list_directory(os.path.dirname(sync_file), recursive=False)) != int(os.environ["WORLD_SIZE"])//8:
+        time.sleep(args.sleep)
     #torch.distributed.barrier()
     
