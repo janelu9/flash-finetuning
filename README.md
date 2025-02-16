@@ -18,7 +18,7 @@ Training Large Language Model faster, easily and low-cost.
 pip wheel -e . --no-deps && pip install jllm-*-py3-none-any.whl
 ```
 
-## Data Handling
+## Data Processing
 
 This step is optional but recommended especially when your data are too big to be loaded to CPU memory at once.
 
@@ -213,6 +213,7 @@ python -m jllm.cat2hf \
 |  internlm2   |             -             |
 |  internvl2   |             -             |
 |   qwen2-vl   |             -             |
+|  qwen2.5-vl  |                           |
 
 ***Note**: The training speed of each model was measured on 64 NVIDIA A100-PCIE-40GB GPUs linked by 100Gb/s bandwidth of InfiniBand with data type of bfloat16 and batch token size of 2048\*2048 (batch_size\*sequence_length,  batch_size = micro_batch_size \* gradient_accumulation_steps).*
 
