@@ -488,20 +488,28 @@ def main(args):
 def llama_template(tokenizer,**kwargs):
     
     PREFIX,ADAPT=[],[]
-    tokenizer.pad_token_id = 0
-    tokenizer.im_start_id = tokenizer.encode('<|im_start|>')[0]
-    tokenizer.im_end_id = tokenizer.encode('<|im_end|>')[0]
-    nl_token_id = tokenizer.encode("\n")
-    system_id = tokenizer.encode("system")
-    user_id = tokenizer.encode("user")
-    assistant_id = tokenizer.encode("assistant")
-    
-    ROLE = {
-        'system': [tokenizer.im_start_id] + system_id + nl_token_id,
-        'user': nl_token_id + [tokenizer.im_start_id]+ user_id + nl_token_id,
-        'assistant': [tokenizer.im_end_id] + nl_token_id + [tokenizer.im_start_id] + assistant_id + nl_token_id
-    }
-    
+    if len(tokenizer.encode('<think>'))==1:
+        tokenizer.im_end_id = tokenizer.eos_token_id
+        ROLE = {
+            'user': tokenizer.encode('<｜User｜>'),
+            'assistant': tokenizer.encode('<｜Assistant｜>')
+        }
+        ADAPT = [tokenizer.bos_token_id]
+    else:
+        tokenizer.pad_token_id = 0
+        tokenizer.im_start_id = tokenizer.encode('<|im_start|>')[0]
+        tokenizer.im_end_id = tokenizer.encode('<|im_end|>')[0]
+        nl_token_id = tokenizer.encode("\n")
+        system_id = tokenizer.encode("system")
+        user_id = tokenizer.encode("user")
+        assistant_id = tokenizer.encode("assistant")
+        
+        ROLE = {
+            'system': [tokenizer.im_start_id] + system_id + nl_token_id,
+            'user': nl_token_id + [tokenizer.im_start_id]+ user_id + nl_token_id,
+            'assistant': [tokenizer.im_end_id] + nl_token_id + [tokenizer.im_start_id] + assistant_id + nl_token_id
+        }
+
     return tokenizer,ROLE,PREFIX,ADAPT
     
 def llama3_template(tokenizer,**kwargs):
