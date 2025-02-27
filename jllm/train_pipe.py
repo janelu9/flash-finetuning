@@ -247,6 +247,9 @@ parser.add_argument('--dist_data',
 parser.add_argument('--no_safetensor',
                     action='store_true',
                     help='not use safetensor.')
+parser.add_argument('--async_tensor_model_parallel_allreduce',
+                    action='store_true',
+                    help='async tensor_model_parallel_allreduce')
 parser.add_argument('--init',
                     action='store_true',
                     help='train from 0')
@@ -432,7 +435,8 @@ def main(args):
         parallel_config = ModelParallelConfig(tensor_model_parallel_size=args.model_parallel_size,
                                               pipeline_model_parallel_size=args.pipe_parallel_size,
                                               params_dtype=config.torch_dtype,
-                                              pipeline_dtype=config.torch_dtype
+                                              pipeline_dtype=config.torch_dtype,
+                                              async_tensor_model_parallel_allreduce=args.async_tensor_model_parallel_allreduce
                                              )
         parallel_config.batch_size = args.per_device_train_batch_size
         parallel_config.seq_length = config.seq_len

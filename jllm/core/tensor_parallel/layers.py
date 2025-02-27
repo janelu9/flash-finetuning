@@ -1141,7 +1141,7 @@ class RowParallelLinear(torch.nn.Module):
         init_method: Callable = init.xavier_uniform_,
         bias: bool = False,
         input_is_parallel: bool = True,
-        skip_bias_add: bool = True,
+        skip_bias_add: bool = False,
         stride: int = 1,
         keep_master_weight_for_test: bool = False,
         is_expert: bool = False,
