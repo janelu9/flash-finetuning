@@ -194,7 +194,7 @@ parser.add_argument("--checkpoint",
                     help="checkpoint dir")
 parser.add_argument('--background_executor',
                     type=str,
-                    default='process',
+                    default='none',
                     choices=["process", "thread", "null", "none",""],
                     help='excutor of background')
 parser.add_argument('--ckpt_step_gt',
@@ -250,6 +250,9 @@ parser.add_argument('--no_safetensor',
 parser.add_argument('--async_tensor_model_parallel_allreduce',
                     action='store_true',
                     help='async tensor_model_parallel_allreduce')
+parser.add_argument('--no_pin_memory',
+                    action='store_true',
+                    help='not pin memory ')
 parser.add_argument('--init',
                     action='store_true',
                     help='train from 0')
@@ -425,7 +428,7 @@ def main(args):
     topo = ProcessTopology(['data','pipe','model'], [args.data_parallel_size, args.pipe_parallel_size, args.model_parallel_size])
     args.seed = args.seed + topo.get_coord(args.global_rank).pipe
     
-    if args.model_parallel_size >1:
+    if args.model_parallel_size >=1:
         if args.device == 'npu':
             import jllm.ascend
         from jllm.core import parallel_state,tensor_parallel
