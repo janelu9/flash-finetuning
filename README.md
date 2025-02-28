@@ -39,10 +39,10 @@ python -m jllm.raw2ids \
 
 ```shell
 python -m jllm.raw2ids \
-    --tokenizer Qwen2-VL-7B-Instruct \
+    --tokenizer Qwen2.5-VL-7B-Instruct \
     -i dataset_vl.jsonl \
     --image_path images \
-    --max_len 8193 \
+    --max_len 32769 \
 ```
 
 Folder `images` stores all the images data.  Format of  `dataset_vl.jsonl` is like:
@@ -134,7 +134,7 @@ deepspeed --module jllm.train_pipe \
     --num_train_epochs 3 \
     --train_data dataset0_Qwen2.5-7B-Instruct \
     --pipe_parallel_size 2 \
-    --model_parallel_size 2 \
+    --model_parallel_size 1 \
     --sequence_parallel_size 2 \
     --per_device_train_batch_size 1 \
     --global_batch_size 32 \
@@ -151,17 +151,19 @@ deepspeed --module jllm.train_pipe \
 ```shell
 deepspeed -H $HOSTFILE \
     --module jllm.train_pipe \
-    --model Qwen2-VL-7B-Instruct \
+    --model Qwen2.5-VL-7B-Instruct \
     --num_train_epochs 3 \
-    --train_data dataset_vl_Qwen2-VL-7B-Instruct \
-    --pipe_parallel_size 8 \
+    --train_data dataset_vl_Qwen2.5-VL-7B-Instruct \
+    --pipe_parallel_size 4 \
+    --model_parallel_size 4 \
     --encoder_pipe_parallel_size 2 \
     --per_device_train_batch_size 1 \
-    --global_batch_size 32 \
+    --global_batch_size 64 \
     --only_ckpt_model \
     --max_num_checkpoints 2 \
-    --partition_method 11,2 \
+    --partition_method fast \
     --split_dlayer \
+    --no_pin_memory \
     --checkpoint_grad_interval 1 \
     --checkpoint checkpoint
 ```
